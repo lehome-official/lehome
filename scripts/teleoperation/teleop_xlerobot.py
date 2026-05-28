@@ -6,6 +6,7 @@
 """Script to run lehome teleoperation with xlerobot control."""
 
 """Launch Isaac Sim Simulator first."""
+import logging
 import multiprocessing
 
 if multiprocessing.get_start_method() != "spawn":
@@ -13,6 +14,27 @@ if multiprocessing.get_start_method() != "spawn":
 
 import argparse
 from isaaclab.app import AppLauncher
+
+
+class _QuietIsaacLabWarnings(logging.Filter):
+    """Filter known noisy IsaacLab warnings during teleoperation startup."""
+
+    _IGNORED_PREFIXES = (
+        "The `enable_external_forces_every_iteration` parameter",
+        "Not all actuators are configured!",
+    )
+
+    def filter(self, record):
+        return not str(record.getMessage()).startswith(self._IGNORED_PREFIXES)
+
+
+def _suppress_noisy_startup_warnings():
+    warning_filter = _QuietIsaacLabWarnings()
+    for logger_name in (
+        "isaaclab.sim.simulation_context",
+        "isaaclab.assets.articulation.articulation",
+    ):
+        logging.getLogger(logger_name).addFilter(warning_filter)
 
 # add argparse arguments
 parser = argparse.ArgumentParser(
@@ -48,6 +70,11 @@ parser.add_argument(
     default=30, 
     help="Environment stepping rate in Hz."
 )
+parser.add_argument(
+    "--quiet_kit_logs",
+    action="store_true",
+    help="Suppress Omniverse/PhysX warning spam in the terminal. Diagnostics still go to Kit log files.",
+)
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -55,6 +82,14 @@ AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 
 app_launcher_args = vars(args_cli)
+if args_cli.quiet_kit_logs:
+    _suppress_noisy_startup_warnings()
+    quiet_kit_args = (
+        '--/log/outputStreamLevel="Fatal" '
+        '--/log/debugConsoleLevel="Fatal" '
+        '--/log/fileLogLevel="Warning"'
+    )
+    app_launcher_args["kit_args"] = f"{app_launcher_args.get('kit_args', '')} {quiet_kit_args}".strip()
 
 # launch omniverse app
 app_launcher = AppLauncher(app_launcher_args)
@@ -102,6 +137,7 @@ def main():
         device=args_cli.device,
         num_envs=args_cli.num_envs,
     )
+    env_cfg.seed = args_cli.seed
     
     # Initialize Xlerobot action configuration.
     env_cfg = init_xlerobot_action_cfg(env_cfg, "keyboard")
