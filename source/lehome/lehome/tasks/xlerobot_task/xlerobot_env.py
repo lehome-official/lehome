@@ -249,7 +249,7 @@ class XlerobotEnv(DirectRLEnv):
             raise RuntimeError(
                 "Xlerobot base joints are missing; continuous base control cannot start."
                 f" missing={missing_base}. "
-                "Run `python scripts/tools/inspect_xlerobot_usd.py` to inspect the USD joint definitions."
+                "Check the Xlerobot USD joint definitions."
             )
 
         self._base_joint_id_map = {name: joint_names.index(name) for name in self._BASE_JOINT_NAMES}
