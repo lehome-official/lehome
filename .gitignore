@@ -70,17 +70,6 @@ _build
 # Downloaded assets / external dependencies
 Assets/*
 !Assets/.gitkeep
-!Assets/lekiwi/
-!Assets/lekiwi/**
-!Assets/robots/
-!Assets/robots/xlerobot/
-!Assets/robots/xlerobot/**
-!Assets/scenes/
-!Assets/scenes/**
-!Assets/Garment/
-!Assets/Garment/**
-!Assets/Material/
-!Assets/Material/**
 third_party/IsaacLab/
 
 # Teleop Recorded Dataset
