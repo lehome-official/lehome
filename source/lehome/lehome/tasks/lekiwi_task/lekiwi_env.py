@@ -12,9 +12,7 @@ from isaaclab.assets import Articulation
 from .lekiwi_cfg import LekiwiEnvCfg
 
 from lehome.assets.scenes.loft import LEKIWI_LOFT_USD_PATH
-from lehome.assets.object.Garment import GarmentObject
 from lehome.devices.lekiwi_action_process import clamp_lekiwi_joint_targets
-from omegaconf import OmegaConf
 
 
 class LekiwiEnv(DirectRLEnv):
@@ -74,23 +72,6 @@ class LekiwiEnv(DirectRLEnv):
             )
             self.scene.sensors["front_camera"] = self._front_camera
 
-        if os.getenv("LEHOME_DISABLE_GARMENT", "0") != "1":
-            garment_usd = (
-                "Assets/Garment/Tops/Collar_Lsleeve_FrontClose/"
-                "TCLC_002/TCLC_002_obj.usd"
-            )
-            garment_config = (
-                "source/lehome/lehome/tasks/lekiwi_task/"
-                "config_file/particle_garment_cfg.yaml"
-            )
-            self.garment = GarmentObject(
-                prim_path="/World/Cloth",
-                usd_path=garment_usd,
-                visual_usd_path="Assets/Material/Garment/linen_Blue.usd",
-                config=OmegaConf.load(garment_config),
-            )
-
-        # Garment initialization is delayed until after physics starts.
         self.scene.clone_environments(copy_from_source=False)
 
         light_cfg = DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
@@ -101,17 +82,6 @@ class LekiwiEnv(DirectRLEnv):
         if not hasattr(self, '_initial_pose_set'):
             self._set_robot_initial_pose()
             self._initial_pose_set = True
-
-        if not hasattr(self, '_garment_initialized'):
-            try:
-                if hasattr(self, 'garment') and self.garment is not None:
-                    self.garment.initialize()
-                    print("[LekiwiEnv] Garment initialized.")
-                    self._garment_initialized = True
-            except Exception as e:
-                print(f"[LekiwiEnv] Failed to initialize garment: {e}")
-                import traceback
-                traceback.print_exc()
 
         super()._post_physics_step()
 
@@ -261,25 +231,6 @@ class LekiwiEnv(DirectRLEnv):
         print(f"[LekiwiEnv] Robot reset position: {initial_position}")
 
         self.actions[env_ids] = 0.0
-
-        if hasattr(self, 'garment') and self.garment is not None:
-            try:
-                if hasattr(self.garment, 'initial_points_positions'):
-                    print("[LekiwiEnv] Resetting garment.")
-                    self.garment.reset()
-                    print("[LekiwiEnv] Garment reset complete.")
-                else:
-                    print("[LekiwiEnv] Garment not initialized; initializing now.")
-                    self.garment.initialize()
-                    print("[LekiwiEnv] Garment initialized; resetting now.")
-                    self.garment.reset()
-                    print("[LekiwiEnv] Garment reset complete.")
-            except Exception as e:
-                print(f"[LekiwiEnv] Failed to reset garment: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print("[LekiwiEnv] No garment configured; skipping garment reset.")
 
         super()._reset_idx(env_ids)
         print("[LekiwiEnv] Reset complete.")

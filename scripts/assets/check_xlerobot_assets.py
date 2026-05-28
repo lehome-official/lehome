@@ -9,9 +9,7 @@ REQUIRED_FILES = [
     "Assets/robots/xlerobot/xlerobot/configuration/xlerobot_base.usd",
     "Assets/robots/xlerobot/xlerobot/configuration/xlerobot_physics.usd",
     "Assets/robots/xlerobot/meshes/Base.stl",
-    "Assets/scenes/1BRAPT_LeHome/1BRAPT_LeHome.usd",
-    "Assets/Garment/Tops/Collar_Lsleeve_FrontClose/TCLC_002/TCLC_002_obj.usd",
-    "Assets/Material/Garment/linen_Blue.usd",
+    "Assets/scenes/kitchen_with_orange/scene.usd",
 ]
 
 

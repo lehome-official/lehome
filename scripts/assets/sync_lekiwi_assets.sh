@@ -6,8 +6,6 @@ DST_ROOT="$(git rev-parse --show-toplevel)"
 
 REQUIRED_DIRS=(
   "Assets/lekiwi"
-  "Assets/Garment/Tops/Collar_Lsleeve_FrontClose/TCLC_002"
-  "Assets/Material/Garment"
 )
 
 echo "[sync] source: ${SRC_ROOT}"

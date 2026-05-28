@@ -6,10 +6,7 @@ from pathlib import Path
 
 REQUIRED_FILES = [
     "Assets/lekiwi/lekiwi_final_best.usd",
-    "Assets/lekiwi/test_lekiwi.usd",
-    "Assets/scenes/1BRAPT_LeHome/1BRAPT_LeHome.usd",
-    "Assets/Garment/Tops/Collar_Lsleeve_FrontClose/TCLC_002/TCLC_002_obj.usd",
-    "Assets/Material/Garment/linen_Blue.usd",
+    "Assets/scenes/kitchen_with_orange/scene.usd",
 ]
 
 

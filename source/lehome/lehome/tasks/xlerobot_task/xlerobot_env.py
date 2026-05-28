@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import torch
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.lights import DomeLightCfg
@@ -10,9 +9,6 @@ from isaaclab.assets import Articulation
 from .xlerobot_cfg import XlerobotEnvCfg
 from lehome.assets.scenes.loft import XLEROBOT_LOFT_USD_PATH
 from lehome.assets.robots.xlerobot import XLEROBOT_JOINT_LIMITS
-from lehome.assets.object.Garment import GarmentObject
-from lehome.utils.constant import ASSETS_ROOT
-from omegaconf import OmegaConf
 
 
 class XlerobotEnv(DirectRLEnv):
@@ -135,25 +131,6 @@ class XlerobotEnv(DirectRLEnv):
         if hasattr(self.cfg, "front_camera"):
             self._front_camera = self.cfg.front_camera.class_type(self.cfg.front_camera)
             self.scene.sensors["front_camera"] = self._front_camera
-
-        if os.getenv("LEHOME_DISABLE_GARMENT", "0") != "1":
-            task_dir = Path(__file__).resolve().parent
-            garment_cfg = task_dir / "particle_garment_cfg.yaml"
-            self.garment = GarmentObject(
-                prim_path="/World/Cloth",
-                usd_path=str(
-                    Path(ASSETS_ROOT)
-                    / "Garment"
-                    / "Tops"
-                    / "Collar_Lsleeve_FrontClose"
-                    / "TCLC_002"
-                    / "TCLC_002_obj.usd"
-                ),
-                visual_usd_path=str(
-                    Path(ASSETS_ROOT) / "Material" / "Garment" / "linen_Blue.usd"
-                ),
-                config=OmegaConf.load(str(garment_cfg)),
-            )
 
         self.scene.clone_environments(copy_from_source=False)
 
@@ -375,17 +352,6 @@ class XlerobotEnv(DirectRLEnv):
         if not hasattr(self, "_initial_pose_set"):
             self._set_robot_initial_pose()
             self._initial_pose_set = True
-
-        if not hasattr(self, "_garment_initialized"):
-            try:
-                if hasattr(self, "garment") and self.garment is not None:
-                    self.garment.initialize()
-                    print("[XlerobotEnv] Garment initialized.")
-                    self._garment_initialized = True
-            except Exception as e:
-                print(f"[XlerobotEnv] Failed to initialize garment: {e}")
-                import traceback
-                traceback.print_exc()
 
         super()._post_physics_step()
 
@@ -642,25 +608,6 @@ class XlerobotEnv(DirectRLEnv):
                 torch.zeros((env_count, 6), device=self.device),
                 env_ids=env_ids,
             )
-
-        if hasattr(self, "garment") and self.garment is not None:
-            try:
-                if hasattr(self.garment, "initial_points_positions"):
-                    print("[XlerobotEnv] Resetting garment.")
-                    self.garment.reset()
-                    print("[XlerobotEnv] Garment reset complete.")
-                else:
-                    print("[XlerobotEnv] Garment not initialized; initializing now.")
-                    self.garment.initialize()
-                    print("[XlerobotEnv] Garment initialized; resetting now.")
-                    self.garment.reset()
-                    print("[XlerobotEnv] Garment reset complete.")
-            except Exception as e:
-                print(f"[XlerobotEnv] Failed to reset garment: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print("[XlerobotEnv] No garment configured; skipping garment reset.")
 
         super()._reset_idx(env_ids)
         print("[XlerobotEnv] Reset complete.")
