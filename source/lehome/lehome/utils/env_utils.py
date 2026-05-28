@@ -3,8 +3,8 @@ import torch
 
 
 def dynamic_reset_gripper_effort_limit_sim(env, teleop_device):
-    # xlerobot默认关闭“按最近物体质量动态改夹爪力矩”，
-    # 避免抓轻小刚体（如cube）时力矩被压得过低导致“碰到了但抓不住”。
+    # Xlerobot keeps dynamic gripper effort disabled by default. Nearby
+    # lightweight objects can otherwise lower effort too much for a stable grasp.
     if teleop_device == "xlerobot" and os.getenv("LEHOME_XLEROBOT_DYNAMIC_GRIPPER_EFFORT", "0") != "1":
         return
 
@@ -42,7 +42,7 @@ def write_gripper_effort_limit_sim(env, env_arm):
     target_masses = object_masses[min_indices.cpu(), 0, 0]  # [num_envs]
     target_effort_limits = (target_masses / 0.15).to(env_arm._data.joint_effort_limits.device)
 
-    # 夹爪力矩保护范围，避免过低夹不住或过高导致抖动。
+    # Bound gripper effort to avoid weak grasps or unstable high-force contact.
     effort_min = float(os.getenv("LEHOME_GRIPPER_EFFORT_MIN", "5.0"))
     effort_max = float(os.getenv("LEHOME_GRIPPER_EFFORT_MAX", "200.0"))
     if effort_max < effort_min:

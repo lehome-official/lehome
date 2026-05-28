@@ -103,7 +103,7 @@ def main():
         num_envs=args_cli.num_envs,
     )
     
-    # 初始化xlerobot动作配置
+    # Initialize Xlerobot action configuration.
     env_cfg = init_xlerobot_action_cfg(env_cfg, "keyboard")
     
     task_name = args_cli.task
@@ -136,8 +136,8 @@ def main():
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
-            # 动态重置夹爪力矩限制
-            dynamic_reset_gripper_effort_limit_sim(env, "xlerobot")  # 修复：传递正确的设备类型
+            # Refresh gripper effort limits when dynamic gripper logic is enabled.
+            dynamic_reset_gripper_effort_limit_sim(env, "xlerobot")
             
             # Get actions from keyboard
             actions = teleop_interface.advance()

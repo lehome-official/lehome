@@ -102,7 +102,7 @@ def main():
     """Running lehome teleoperation with lekiwi control."""
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device)
 
-    # 初始化lekiwi动作配置
+    # Initialize Lekiwi action configuration.
     env_cfg = init_lekiwi_action_cfg(env_cfg, "lekiwi_keyboard")
 
     task_name = args_cli.task
@@ -116,13 +116,13 @@ def main():
         sensitivity=0.25 * args_cli.sensitivity
     )
 
-    # 输出控制说明
+    # Print control instructions.
     print("\n" + "="*60)
-    print("🎮 Lekiwi 键盘控制说明")
+    print("Lekiwi Keyboard Teleoperation")
     print("="*60)
     print(teleop_interface)
     print("="*60)
-    print("💡 提示：按 B 键启动控制，按 F5 重置环境")
+    print("Press B to start control. Press F5 to reset the environment.")
     print("="*60 + "\n")
 
     # add teleoperation key for env reset
@@ -142,11 +142,9 @@ def main():
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
-            # 动态重置夹爪力矩限制
+            # Refresh gripper effort limits when dynamic gripper logic is enabled.
             dynamic_reset_gripper_effort_limit_sim(env, "lekiwi_keyboard")
 
-            # 先更新状态，再获取动作
-            # teleop_interface.input2action()  # 更新控制器状态
             actions = teleop_interface.advance()
 
             if actions is None:

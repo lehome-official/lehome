@@ -12,7 +12,7 @@ from ...assets.robots.xlerobot import XLEROBOT_JOINT_LIMITS
 
 
 class XlerobotHybridController(Device):
-    """Xlerobot混合控制器：键盘控制底盘和头部，BiSO101Leader控制双臂"""
+    """Hybrid controller: keyboard base/head control plus dual SO101 leaders."""
     
     def __init__(self, env, sensitivity: float = 1.0, 
                  left_arm_port: str = '/dev/ttyACM0', 
@@ -20,10 +20,10 @@ class XlerobotHybridController(Device):
                  recalibrate: bool = False):
         super().__init__(env)
         
-        # 创建键盘控制器（仅用于底盘和头部控制）
+        # Keyboard controller for base and head control.
         self.keyboard_controller = XlerobotKeyboard(env, sensitivity)
         
-        # 创建双臂控制器
+        # Dual-arm leader controller.
         self.bi_arm_controller = BiXlerobotLeader(
             env, 
             left_port=left_arm_port, 
@@ -31,24 +31,24 @@ class XlerobotHybridController(Device):
             recalibrate=recalibrate
         )
         
-        # 控制模式标志
+        # Control mode state.
         self.control_mode = "hybrid"  # "keyboard", "hybrid", "arms_only"
         
-        # 状态标志
+        # Runtime state.
         self.started = False
         self._reset_state = False
         self._lerobot_compat = os.getenv("LEHOME_XLEROBOT_LEROBOT_COMPAT", "0") == "1"
         if self._lerobot_compat:
             print("XlerobotHybridController: lerobot-compatible arm mapping enabled.")
 
-        # 机械臂抗抖参数（主要用于leader绝对控制）
+        # Arm smoothing parameters for absolute leader control.
         self._arm_smooth_alpha = float(os.getenv("LEHOME_XLEROBOT_ARM_SMOOTH_ALPHA", "0.25"))
         self._arm_smooth_alpha = float(np.clip(self._arm_smooth_alpha, 0.0, 1.0))
         self._arm_deadband = max(0.0, float(os.getenv("LEHOME_XLEROBOT_ARM_DEADBAND", "0.01")))
         self._arm_max_step = max(0.0, float(os.getenv("LEHOME_XLEROBOT_ARM_MAX_STEP", "0.05")))
         self._jaw_max_step = max(0.0, float(os.getenv("LEHOME_XLEROBOT_JAW_MAX_STEP", "0.18")))
 
-        # 第二关节（shoulder_lift）轻微量程补偿，解决“收不回去”问题。
+        # Mild shoulder-lift gain to improve reachable return motion.
         self._shoulder_lift_gain = float(os.getenv("LEHOME_XLEROBOT_SHOULDER_LIFT_GAIN", "1.15"))
         self._shoulder_lift_gain = max(1.0, self._shoulder_lift_gain)
 
@@ -57,23 +57,23 @@ class XlerobotHybridController(Device):
         self._latest_state_vector = None
         self._cached_arms_action = None
 
-        # 默认启用 F6 模式切换快捷键
+        # Enable F6 mode switching by default.
         self.add_callback("F6", lambda: None)
         
     def set_control_mode(self, mode: str):
-        """设置控制模式"""
+        """Set the active control mode."""
         assert mode in ["keyboard", "hybrid", "arms_only"], f"Invalid control mode: {mode}"
         if mode != self.control_mode:
-            # 切模式时清空滤波缓存，避免旧模式残留目标带来突变。
+            # Clear filters when switching modes to avoid stale targets.
             self._left_arm_filtered = None
             self._right_arm_filtered = None
             self._latest_state_vector = None
             self._cached_arms_action = None
-            # 切到非键盘底盘模式时，强制清零底盘命令，避免残留速度命令。
+            # Clear base commands when entering arms-only mode.
             if mode == "arms_only":
                 self._clear_base_command()
         self.control_mode = mode
-        print(f"控制模式切换为: {mode}")
+        print(f"[XlerobotHybridController] Control mode set to: {mode}")
 
     def _clear_base_command(self):
         if hasattr(self.env, "set_base_command"):
@@ -114,7 +114,7 @@ class XlerobotHybridController(Device):
         return hybrid_state
         
     def get_device_state(self):
-        """获取设备状态"""
+        """Return the current device state."""
         if self.control_mode == "keyboard":
             return self.keyboard_controller.get_device_state()
         elif self.control_mode == "arms_only":
@@ -131,7 +131,7 @@ class XlerobotHybridController(Device):
             return self._build_hybrid_state_vector(keyboard_state, arms_state, motor_limits)
 
     def input2action(self):
-        """将输入转换为动作"""
+        """Convert device input into an action dictionary."""
         if self.control_mode == "keyboard":
             action = self.keyboard_controller.input2action()
             self.started = action.get("started", False)
@@ -141,7 +141,7 @@ class XlerobotHybridController(Device):
         elif self.control_mode == "arms_only":
             action = self.bi_arm_controller.input2action()
             self.started = action.get("started", False)
-            # 更新缓存，并直接用本帧缓存构建动作，避免重复串口读取
+            # Use one serial read per frame and reuse the cached result.
             self._cached_arms_action = action
             self._clear_base_command()
             self._latest_state_vector = self._build_arms_state_vector(
@@ -153,13 +153,13 @@ class XlerobotHybridController(Device):
             keyboard_action = self.keyboard_controller.input2action()
             arms_action = self.bi_arm_controller.input2action()
             
-            # hybrid 模式允许键盘或双臂任一侧触发启动
+            # Hybrid mode may be started from either keyboard or arm leaders.
             self.started = (
                 keyboard_action.get("started", False)
                 or arms_action.get("started", False)
             )
             
-            # 更新缓存
+            # Update cached serial state.
             self._cached_arms_action = arms_action
             keyboard_state = keyboard_action.get("joint_state")
             if keyboard_state is None:
@@ -185,16 +185,16 @@ class XlerobotHybridController(Device):
             return hybrid_action
     
     def advance(self):
-        """获取当前动作"""
+        """Return the current action tensor."""
         if not self.started:
             return None
 
-        # 优先使用input2action()阶段缓存，避免同一帧重复读串口导致抖动。
+        # Prefer input2action() cache to avoid duplicate serial reads.
         action = self._latest_state_vector if self._latest_state_vector is not None else self.get_device_state()
         return torch.tensor(action, dtype=torch.float32, device=self.env.device)
     
     def reset(self):
-        """重置控制器状态"""
+        """Reset controller state."""
         self.keyboard_controller.reset()
         self.bi_arm_controller.reset()
         self.started = False
@@ -206,9 +206,9 @@ class XlerobotHybridController(Device):
         self._clear_base_command()
     
     def add_callback(self, key: str, func: Callable):
-        """添加回调函数"""
-        # 键盘回调用于控制模式切换
-        if key == "F6":  # F6键切换控制模式
+        """Register a controller callback."""
+        # Keyboard callbacks handle mode switching.
+        if key == "F6":
             def toggle_mode():
                 if self.control_mode == "hybrid":
                     self.set_control_mode("keyboard")
@@ -218,42 +218,39 @@ class XlerobotHybridController(Device):
                     self.set_control_mode("hybrid")
             self.keyboard_controller.add_callback(key, toggle_mode)
         else:
-            # 其他回调传递给键盘控制器
+            # Other callbacks go to the keyboard controller.
             self.keyboard_controller.add_callback(key, func)
             
-            # 对于B键，也需要传递给BiSO101Leader以启动双臂控制
+            # Forward B so BiSO101Leader can start arm control.
             if key == "B":
-                # 直接传递B键回调给BiSO101Leader
                 self.bi_arm_controller.add_callback(key, func)
-            # 其他键不传递给BiSO101Leader，避免不必要的按键处理
     
     def __str__(self) -> str:
-        """返回控制器信息"""
-        msg = "Xlerobot混合控制器\n"
-        msg += f"\t当前控制模式: {self.control_mode}\n"
+        """Return a human-readable controller summary."""
+        msg = "Xlerobot Hybrid Controller\n"
+        msg += f"\tControl mode: {self.control_mode}\n"
         msg += "\t----------------------------------------------\n"
-        msg += "\t键盘控制: 底盘移动(W/A/S/D) + 头部运动(Home/End/PageUp/PageDown)\n"
-        msg += "\t双臂控制器: 机械臂和夹爪控制\n"
+        msg += "\tKeyboard: base (W/A/S/D/Q/E) and head (Home/End/PageUp/PageDown)\n"
+        msg += "\tDual leaders: arms and grippers\n"
         msg += "\t----------------------------------------------\n"
-        msg += "\tF6: 切换控制模式 (hybrid <-> keyboard <-> arms_only)\n"
-        msg += "\tB: 启动控制\n"
-        msg += "\tF5: 重置环境\n"
-        msg += "\t退出: Ctrl+C\n"
+        msg += "\tF6: switch mode (hybrid <-> keyboard <-> arms_only)\n"
+        msg += "\tB: start control\n"
+        msg += "\tF5: reset environment\n"
+        msg += "\tExit: Ctrl+C\n"
         return msg
 
     def _convert_arm_action(self, joint_state: dict, motor_limits: dict) -> np.ndarray:
-        """转换单臂动作，使用与原有BiSO101Leader相同的转换逻辑"""
+        """Convert one SO101 leader arm into the Xlerobot arm layout."""
         processed_action = np.zeros(6)
         
-        # 如果没有motor_limits，返回零动作
         if not motor_limits:
-            print("警告：没有找到motor_limits，返回零动作")
+            print("[XlerobotHybridController] Missing motor limits; using zero arm action.")
             return processed_action
         
-        # 使用与原有代码相同的关节限制（角度）
+        # SO101 follower joint limits are expressed in degrees.
         from lehome.assets.robots.lerobot import SO101_FOLLOWER_USD_JOINT_LIMLITS
         
-        # 关节名称到索引的映射
+        # SO101 joint name to Xlerobot arm action index.
         joint_mapping = {
             'shoulder_pan': 0,
             'shoulder_lift': 1,
@@ -263,9 +260,9 @@ class XlerobotHybridController(Device):
             'gripper': 5
         }
         
-        # 关节方向校正配置（如果某个关节方向相反，设置为-1）
+        # Direction correction for SO101-to-Xlerobot geometry.
         joint_direction_correction = {
-            'shoulder_pan': 1,    # 1表示正常方向，-1表示反向
+            'shoulder_pan': 1,
             'shoulder_lift': -1,
             'elbow_flex': 1,
             'wrist_flex': 1,
@@ -273,15 +270,14 @@ class XlerobotHybridController(Device):
             'gripper': 1
         }
         
-        # 关节零位偏移校正（弧度）
-        # 正值表示仿真关节需要向正方向偏移，负值表示向负方向偏移
+        # Zero offsets in radians.
         joint_zero_offset = {
-            'shoulder_pan': 0.0,      # 肩部旋转
-            'shoulder_lift': 1.57,   # 肩部抬升：偏移-90度（-π/2）
-            'elbow_flex': 1.57,      # 肘部弯曲：偏移-90度（-π/2）
-            'wrist_flex': 0.0,        # 腕部弯曲
-            'wrist_roll': 0.0,        # 腕部旋转
-            'gripper': 0.0            # 夹爪
+            'shoulder_pan': 0.0,
+            'shoulder_lift': 1.57,
+            'elbow_flex': 1.57,
+            'wrist_flex': 0.0,
+            'wrist_roll': 0.0,
+            'gripper': 0.0
         }
         
         for joint_name, index in joint_mapping.items():
@@ -289,31 +285,30 @@ class XlerobotHybridController(Device):
                 motor_limit_range = motor_limits[joint_name]
                 joint_limit_range = SO101_FOLLOWER_USD_JOINT_LIMLITS[joint_name]
                 
-                # 将电机范围映射到关节范围（角度）
+                # Map motor range to SO101 joint range in degrees.
                 processed_degree = (joint_state[joint_name] - motor_limit_range[0]) / (motor_limit_range[1] - motor_limit_range[0]) \
                     * (joint_limit_range[1] - joint_limit_range[0]) + joint_limit_range[0]
-                processed_radius = processed_degree / 180.0 * np.pi  # 转换为弧度
+                processed_radius = processed_degree / 180.0 * np.pi
 
                 if self._lerobot_compat:
-                    # lerobot兼容 + xlerobot几何对齐：保留必要方向/零位修正，和历史控制行为对齐。
+                    # Preserve the historical lerobot-compatible alignment.
                     direction_correction = joint_direction_correction.get(joint_name, 1)
                     zero_offset = joint_zero_offset.get(joint_name, 0.0)
                     processed_action[index] = processed_radius * direction_correction + zero_offset
                 else:
-                    # 应用方向校正
+                    # Apply direction correction.
                     direction_correction = joint_direction_correction.get(joint_name, 1)
                     processed_radius = processed_radius * direction_correction
 
-                    # 应用零位偏移校正
+                    # Apply zero offset correction.
                     zero_offset = joint_zero_offset.get(joint_name, 0.0)
                     processed_action[index] = processed_radius + zero_offset
 
-                # 第二关节量程补偿：以零位为中心做小幅拉伸，便于收回。
                 if joint_name == "shoulder_lift":
                     center = joint_zero_offset.get("shoulder_lift", 1.57)
                     processed_action[index] = (processed_action[index] - center) * self._shoulder_lift_gain + center
 
-        # 与xlerobot真实关节限位对齐，防止映射越界。
+        # Clamp to the Xlerobot arm/gripper limits.
         arm_joint_order = ["Rotation", "Pitch", "Elbow", "Wrist_Pitch", "Wrist_Roll", "Jaw"]
         lower = np.array([XLEROBOT_JOINT_LIMITS[name][0] for name in arm_joint_order], dtype=np.float64)
         upper = np.array([XLEROBOT_JOINT_LIMITS[name][1] for name in arm_joint_order], dtype=np.float64)
@@ -321,7 +316,7 @@ class XlerobotHybridController(Device):
         return processed_action
 
     def _smooth_arm_action(self, target_action: np.ndarray, arm_side: str) -> np.ndarray:
-        """对绝对目标做死区+低通+步长限制，降低leader抖动。"""
+        """Apply deadband, low-pass filtering, and per-step limits to arm targets."""
         arm_joint_order = ["Rotation", "Pitch", "Elbow", "Wrist_Pitch", "Wrist_Roll", "Jaw"]
         lower = np.array([XLEROBOT_JOINT_LIMITS[name][0] for name in arm_joint_order], dtype=np.float64)
         upper = np.array([XLEROBOT_JOINT_LIMITS[name][1] for name in arm_joint_order], dtype=np.float64)

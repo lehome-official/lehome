@@ -57,7 +57,7 @@ class XlerobotLeader(Device):
         self.connect()
         self._joint_names = tuple(self._bus.motors.keys())
 
-        # 读取鲁棒性参数（应对串口瞬时丢包）
+        # Robustness knobs for transient serial read failures.
         self._sync_read_retry = max(0, int(os.getenv("LEHOME_XLEROBOT_SYNC_READ_RETRY", "2")))
         self._read_warn_every = max(1, int(os.getenv("LEHOME_XLEROBOT_READ_WARN_EVERY", "20")))
         self._read_backoff_sleep_s = max(0.0, float(os.getenv("LEHOME_XLEROBOT_READ_BACKOFF_S", "0.002")))
@@ -65,7 +65,7 @@ class XlerobotLeader(Device):
         self._last_read_fail_msg_time = 0.0
         self._last_joint_state = {name: 0.0 for name in self._joint_names}
 
-        # 尝试读取一次初始状态；失败则使用零位兜底，不中断启动流程。
+        # Read initial state once; fall back to zeros without blocking startup.
         try:
             self._last_joint_state = self._bus.sync_read(
                 "Present_Position", num_retry=self._sync_read_retry
@@ -122,7 +122,7 @@ class XlerobotLeader(Device):
                     self._started = True
                     self._reset_state = False
                     self.other_key_enable = True
-                    print("XlerobotLeader控制已启动！")
+                    print("[XlerobotLeader] Control started.")
         except AttributeError:
             pass
         except Exception as e:
@@ -139,7 +139,7 @@ class XlerobotLeader(Device):
             return joint_state
         except Exception as exc:
             self._consecutive_read_failures += 1
-            # 二级兜底：退化到逐关节读取，避免单个ID掉包导致整帧失效。
+            # Fall back to sequential reads so one dropped ID does not lose the frame.
             recovered_state = {}
             recovered_count = 0
             for joint_name in self._joint_names:
@@ -155,7 +155,7 @@ class XlerobotLeader(Device):
 
             if recovered_count > 0:
                 self._last_joint_state = dict(recovered_state)
-                # 降级读取成功时也做节流提示，方便定位通信抖动来源。
+                # Throttle warnings while still surfacing serial instability.
                 if (
                     self._consecutive_read_failures == 1
                     or self._consecutive_read_failures % self._read_warn_every == 0

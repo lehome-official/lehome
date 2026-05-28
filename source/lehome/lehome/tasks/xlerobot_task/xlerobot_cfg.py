@@ -11,27 +11,27 @@ from lehome.assets.robots.xlerobot import XLEROBOT_CFG
 
 @configclass
 class XlerobotEnvCfg(DirectRLEnvCfg):
-    # 环境配置
+    # Environment configuration.
     decimation = 1
     episode_length_s = 1000
-    action_scale = 3.0  # 动作缩放
-    action_space = 15  # 旋转关节
-    observation_space = 34  # 关节位置和速度
+    action_scale = 3.0
+    action_space = 15
+    observation_space = 34  # joint positions and velocities
     state_space = 0
     robot_initial_position = (2.75, -1.5, 0.0)
     robot_initial_orientation = (0.0, 0.0, 0.0, 1.0)
     render_cfg = sim_utils.RenderCfg(
         rendering_mode="quality", antialiasing_mode="DLAA", dlss_mode=2
     )
-    # 仿真配置
+    # Simulation configuration.
     sim: SimulationCfg = SimulationCfg(dt=1 / 120, render_interval=decimation, render=render_cfg)
 
-    # 机器人配置
+    # Robot configuration.
     robot: ArticulationCfg = XLEROBOT_CFG.replace(
         prim_path="/World/Robot",
         init_state=XLEROBOT_CFG.init_state.replace(pos=robot_initial_position),
     )
-    # 摄像头配置 
+    # Camera configuration.
     front_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/Robot/xlerobot/base_link/front_camera",
         offset=TiledCameraCfg.OffsetCfg(
@@ -51,7 +51,7 @@ class XlerobotEnvCfg(DirectRLEnvCfg):
         height=480,
     )
     
-    # 场景配置
+    # Scene configuration.
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=1, env_spacing=4.0, replicate_physics=True
     )

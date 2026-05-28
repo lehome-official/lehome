@@ -52,15 +52,15 @@ class XlerobotEnv(DirectRLEnv):
         self._robot_initial_position = torch.tensor(self.cfg.robot_initial_position, device=self.device)
         self._robot_initial_orientation = torch.tensor(self.cfg.robot_initial_orientation, device=self.device)
 
-        # 动作模式：relative | absolute（默认relative，向后兼容）
+        # Action mode: relative for keyboard, absolute for hybrid arm control.
         self._action_mode = "relative"
 
-        # 相对控制比例（键盘/F6切换到keyboard时生效）
+        # Relative-control scales used by keyboard mode.
         self._rel_arm_scale = float(os.getenv("LEHOME_XLEROBOT_REL_ARM_SCALE", "3.0"))
         self._rel_gripper_scale = float(os.getenv("LEHOME_XLEROBOT_REL_GRIPPER_SCALE", "0.75"))
         self._rel_head_scale = float(os.getenv("LEHOME_XLEROBOT_REL_HEAD_SCALE", "0.5"))
 
-        # 机械臂绝对控制抗抖参数（leader/hybrid下生效）
+        # Absolute arm target filtering used by leader/hybrid modes.
         self._arm_abs_filter_alpha = float(os.getenv("LEHOME_XLEROBOT_ARM_ABS_FILTER_ALPHA", "1.0"))
         self._arm_abs_filter_alpha = float(min(max(self._arm_abs_filter_alpha, 0.0), 1.0))
         self._arm_abs_deadband = max(0.0, float(os.getenv("LEHOME_XLEROBOT_ARM_ABS_DEADBAND", "0.0")))
@@ -69,22 +69,22 @@ class XlerobotEnv(DirectRLEnv):
         self._debug_arm_limit = os.getenv("LEHOME_DEBUG_XLEROBOT_ARM_LIMIT", "0") == "1"
         self._debug_arm_filter = os.getenv("LEHOME_DEBUG_XLEROBOT_ARM_FILTER", "0") == "1"
 
-        # 底盘控制参数
+        # Base-control parameters.
         self._base_vxy_max = 1.2  # m/s
         self._base_wz_max = 2.4  # rad/s
         self._base_axy_max = 8.0  # m/s^2
         self._base_awz_max = 16.0  # rad/s^2
         self._base_control_dt = max(float(self.cfg.sim.dt * self.cfg.decimation), 1e-6)
 
-        # 底盘命令缓存（body frame）与世界速度缓存
+        # Base-command cache in body frame and velocity cache in world frame.
         self._base_command_body = torch.zeros((self.num_envs, 3), device=self.device)
         self._base_target_vel_world = torch.zeros((self.num_envs, 3), device=self.device)
         self._base_current_vel_world = torch.zeros((self.num_envs, 3), device=self.device)
         self._base_target_pos = torch.zeros((self.num_envs, 3), device=self.device)
-        # 底盘控制模式:
-        # - joint_velocity: 通过root_x/y/z三个dummy joints速度/位置目标驱动
-        # - root_velocity: 连续写root速度（兼容模式，默认）
-        # - auto: 按root_velocity启动，检测到Direct GPU API时自动降级到joint_velocity
+        # Base-control mode:
+        # - joint_velocity: drive root_x/y/z dummy joints with position/velocity targets.
+        # - root_velocity: continuously write root velocity, the default compatibility path.
+        # - auto: start with root_velocity and fall back to joint_velocity for Direct GPU API.
         requested_mode = os.getenv("LEHOME_XLEROBOT_BASE_CONTROL", "root_velocity").strip().lower()
         if requested_mode not in {"auto", "root_velocity", "joint_velocity"}:
             requested_mode = "root_velocity"
@@ -101,7 +101,7 @@ class XlerobotEnv(DirectRLEnv):
         else:
             self._base_control_mode = requested_mode
 
-        # 关节索引初始化与fail-fast检查
+        # Resolve joint ids and fail fast on incompatible assets.
         self._resolve_joint_ids_or_fail()
         self._debug_base_env = os.getenv("LEHOME_DEBUG_XLEROBOT_ENV", "0") == "1"
         self._debug_step = 0
@@ -264,15 +264,15 @@ class XlerobotEnv(DirectRLEnv):
         return True
 
     def _resolve_joint_ids_or_fail(self):
-        """解析关节ID并校验底盘dummy joints必须存在。"""
+        """Resolve joint ids and validate required base dummy joints."""
         joint_names = self._robot.data.joint_names
 
         missing_base = [name for name in self._BASE_JOINT_NAMES if name not in joint_names]
         if missing_base:
             raise RuntimeError(
-                "Xlerobot底盘关节缺失，无法启用连续底盘控制。"
+                "Xlerobot base joints are missing; continuous base control cannot start."
                 f" missing={missing_base}. "
-                "请运行 `python scripts/tools/inspect_xlerobot_usd.py` 检查USD关节定义。"
+                "Run `python scripts/tools/inspect_xlerobot_usd.py` to inspect the USD joint definitions."
             )
 
         self._base_joint_id_map = {name: joint_names.index(name) for name in self._BASE_JOINT_NAMES}
@@ -288,9 +288,9 @@ class XlerobotEnv(DirectRLEnv):
                 self._arm_joint_names.append(joint_name)
 
         if not self._arm_joint_ids:
-            raise RuntimeError("Xlerobot机械臂/头部关节映射为空，请检查机器人USD和动作映射。")
+            raise RuntimeError("No Xlerobot arm/head joints were mapped; check the robot USD and action mapping.")
 
-        # 为机械臂/夹爪/头部准备显式限位（优先使用运行时USD真实限位）。
+        # Build explicit arm/gripper/head limits, preferring runtime USD limits.
         arm_lower = []
         arm_upper = []
         runtime_limits = getattr(self._robot.data, "soft_joint_pos_limits", None)
@@ -313,7 +313,7 @@ class XlerobotEnv(DirectRLEnv):
         self._arm_joint_lower_limits = torch.tensor(arm_lower, device=self.device)
         self._arm_joint_upper_limits = torch.tensor(arm_upper, device=self.device)
 
-        # 为relative模式构建按关节缩放，避免夹爪一步过大造成“弹飞/瞬移感”。
+        # Per-joint relative scales keep gripper steps smaller than arm steps.
         rel_scales = []
         for name in self._arm_joint_names:
             if "Jaw" in name:
@@ -324,7 +324,7 @@ class XlerobotEnv(DirectRLEnv):
                 rel_scales.append(self._rel_arm_scale)
         self._arm_relative_scales = torch.tensor(rel_scales, device=self.device, dtype=torch.float32)
 
-        # 绝对模式每关节单步限幅（jaw单独更小）。
+        # Per-joint absolute target step limits, with smaller jaw steps.
         abs_steps = []
         for name in self._arm_joint_names:
             if "Jaw" in name:
@@ -346,32 +346,32 @@ class XlerobotEnv(DirectRLEnv):
         self._base_body_id = body_names.index("base_link") if "base_link" in body_names else 0
 
     def set_base_command(self, command):
-        """设置底盘命令（body frame）。
+        """Set the base command in body frame.
 
-        输入支持 shape=(3,) 或 (num_envs, 3)，语义为归一化命令：
+        Accepts shape (3,) or (num_envs, 3), interpreted as normalized
         (vx_body, vy_body, wz) in [-1, 1].
         """
         command_tensor = torch.as_tensor(command, dtype=torch.float32, device=self.device)
 
         if command_tensor.ndim == 1:
             if command_tensor.numel() != 3:
-                raise ValueError(f"Base command必须是3维，收到形状: {tuple(command_tensor.shape)}")
+                raise ValueError(f"Base command must contain 3 values, got shape: {tuple(command_tensor.shape)}")
             command_tensor = command_tensor.unsqueeze(0)
 
         if command_tensor.shape[-1] != 3:
-            raise ValueError(f"Base command最后一维必须是3，收到形状: {tuple(command_tensor.shape)}")
+            raise ValueError(f"Base command last dimension must be 3, got shape: {tuple(command_tensor.shape)}")
 
         if command_tensor.shape[0] == 1 and self.num_envs > 1:
             command_tensor = command_tensor.repeat(self.num_envs, 1)
         elif command_tensor.shape[0] != self.num_envs:
             raise ValueError(
-                f"Base command batch与环境数不匹配: batch={command_tensor.shape[0]}, num_envs={self.num_envs}"
+                f"Base command batch size does not match num_envs: batch={command_tensor.shape[0]}, num_envs={self.num_envs}"
             )
 
         self._base_command_body[:] = torch.clamp(command_tensor, -1.0, 1.0)
 
     def _post_physics_step(self):
-        """物理步进后的处理。"""
+        """Handle post-physics-step updates."""
         if not hasattr(self, "_initial_pose_set"):
             self._set_robot_initial_pose()
             self._initial_pose_set = True
@@ -380,23 +380,23 @@ class XlerobotEnv(DirectRLEnv):
             try:
                 if hasattr(self, "garment") and self.garment is not None:
                     self.garment.initialize()
-                    print("✅ 衣服对象初始化成功")
+                    print("[XlerobotEnv] Garment initialized.")
                     self._garment_initialized = True
             except Exception as e:
-                print(f"❌ 衣服对象初始化失败: {e}")
+                print(f"[XlerobotEnv] Failed to initialize garment: {e}")
                 import traceback
                 traceback.print_exc()
 
         super()._post_physics_step()
 
     def _set_robot_initial_pose(self):
-        """设置机器人初始位姿。"""
+        """Set the initial robot pose."""
         try:
             initial_pose = torch.cat([self._robot_initial_position, self._robot_initial_orientation])
             if self._can_write_root_state():
                 self._robot.write_root_pose_to_sim(initial_pose.unsqueeze(0))
 
-            # 清空底盘命令与底盘速度目标
+            # Clear base command and velocity targets.
             self._base_command_body.zero_()
             self._base_target_vel_world.zero_()
             self._base_current_vel_world.zero_()
@@ -415,34 +415,34 @@ class XlerobotEnv(DirectRLEnv):
             )
             self._arm_abs_filtered_target[:] = self._robot.data.joint_pos[:, self._arm_joint_ids]
 
-            print(f"机器人初始位置设置为: {self._robot_initial_position}")
-            print(f"机器人初始朝向设置为: {self._robot_initial_orientation}")
+            print(f"[XlerobotEnv] Initial position set to: {self._robot_initial_position}")
+            print(f"[XlerobotEnv] Initial orientation set to: {self._robot_initial_orientation}")
 
         except Exception as e:
-            print(f"设置机器人初始位姿时出错: {e}")
+            print(f"[XlerobotEnv] Failed to set initial pose: {e}")
             import traceback
             traceback.print_exc()
 
     def set_action_mode(self, mode: str):
-        """设置动作模式: 'relative' | 'absolute'。"""
+        """Set action mode: 'relative' or 'absolute'."""
         assert mode in ["relative", "absolute"]
         self._action_mode = mode
-        print(f"XlerobotEnv 动作模式: {self._action_mode}")
+        print(f"[XlerobotEnv] action_mode={self._action_mode}")
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        """预处理动作。"""
+        """Preprocess actions before a physics step."""
         if actions.dim() == 1:
             actions = actions.unsqueeze(0)
         self.actions = actions.clone()
 
     def _apply_action(self):
-        """应用动作到机器人：底盘走速度控制，机械臂/头部走位置控制。"""
+        """Apply actions to the robot."""
         if self.actions.dim() == 1:
             self.actions = self.actions.unsqueeze(0)
 
         current_joint_pos = self._robot.data.joint_pos
 
-        # 机械臂/头部仍沿用原先relative/absolute逻辑
+        # Arms and head support relative and absolute target modes.
         arm_target_joint_pos = current_joint_pos[:, self._arm_joint_ids].clone()
         action_mode = getattr(self, "_action_mode", "relative")
 
@@ -455,7 +455,7 @@ class XlerobotEnv(DirectRLEnv):
                 arm_target_joint_pos[:, i] = self.actions[:, action_idx]
             arm_target_joint_pos = self._filter_absolute_arm_target(arm_target_joint_pos)
 
-        # 显式夹紧到xlerobot关节限位，避免目标越界导致抖动或异常。
+        # Clamp to explicit Xlerobot joint limits.
         raw_target_before_clamp = arm_target_joint_pos.clone()
         arm_target_joint_pos = torch.max(
             torch.min(arm_target_joint_pos, self._arm_joint_upper_limits),
@@ -473,12 +473,11 @@ class XlerobotEnv(DirectRLEnv):
         self._arm_abs_filtered_target[:] = arm_target_joint_pos
         self._robot.set_joint_position_target(arm_target_joint_pos, joint_ids=self._arm_joint_ids)
 
-        # 底盘使用root_x/root_y/root_z三个dummy joints速度控制
         self._apply_base_velocity_command()
 
     @staticmethod
     def _yaw_from_quat_wxyz(quat_wxyz: torch.Tensor) -> torch.Tensor:
-        """从四元数（wxyz）提取偏航角。"""
+        """Extract yaw from quaternions in wxyz order."""
         w = quat_wxyz[:, 0]
         x = quat_wxyz[:, 1]
         y = quat_wxyz[:, 2]
@@ -488,25 +487,25 @@ class XlerobotEnv(DirectRLEnv):
         return torch.atan2(siny_cosp, cosy_cosp)
 
     def _get_control_yaw(self) -> tuple[torch.Tensor, str]:
-        """获取用于底盘控制的yaw，优先使用可见base_link姿态。"""
+        """Return yaw for base control, preferring visible base_link pose."""
         if hasattr(self._robot.data, "body_link_quat_w"):
             quat = self._robot.data.body_link_quat_w[:, self._base_body_id]
             return self._yaw_from_quat_wxyz(quat), "base_link_quat_w"
 
-        # 兼容回退：从 root_link_pose_w 提取（默认按 wxyz 解释）
+        # Compatibility fallback from root_link_pose_w, interpreted as wxyz.
         quat = self._robot.data.root_link_pose_w[:, 3:7]
         return self._yaw_from_quat_wxyz(quat), "root_link_pose_w"
 
     def _apply_base_velocity_command(self):
-        """将body frame底盘命令转换到world frame并写入底盘关节速度目标。"""
-        # 归一化命令 -> 物理速度目标（body frame）
+        """Convert body-frame base command to world-frame velocity targets."""
+        # Normalized command to physical target velocity in body frame.
         desired_body_vel = self._base_command_body.clone()
         desired_body_vel[:, 0:2] *= self._base_vxy_max
         desired_body_vel[:, 2] *= self._base_wz_max
 
         # body -> world:
-        # - joint_velocity 模式：用底盘yaw关节
-        # - root_velocity 模式：用机器人root真实姿态（避免退化为世界系平移）
+        # - joint_velocity: use base yaw joint.
+        # - root_velocity: use robot root pose to avoid world-frame-only motion.
         if self._base_control_mode == "joint_velocity":
             yaw = self._robot.data.joint_pos[:, self._base_joint_id_map["root_z_rotation_joint"]]
             yaw_source = "joint"
@@ -519,7 +518,7 @@ class XlerobotEnv(DirectRLEnv):
         self._base_target_vel_world[:, 1] = sin_yaw * desired_body_vel[:, 0] + cos_yaw * desired_body_vel[:, 1]
         self._base_target_vel_world[:, 2] = desired_body_vel[:, 2]
 
-        # 速度斜坡，避免瞬时跳变
+        # Velocity ramping avoids instantaneous jumps.
         max_delta_xy = self._base_axy_max * self._base_control_dt
         max_delta_wz = self._base_awz_max * self._base_control_dt
 
@@ -528,12 +527,10 @@ class XlerobotEnv(DirectRLEnv):
         self._base_current_vel_world[:, 2] += torch.clamp(delta[:, 2], -max_delta_wz, max_delta_wz)
 
         if self._base_control_mode == "joint_velocity":
-            # 通过dummy joints驱动
             self._base_target_pos += self._base_current_vel_world * self._base_control_dt
             self._robot.set_joint_position_target(self._base_target_pos, joint_ids=self._base_joint_ids)
             self._robot.set_joint_velocity_target(self._base_current_vel_world, joint_ids=self._base_joint_ids)
         else:
-            # 通过root连续速度驱动（非瞬移）
             root_vel = torch.zeros((self.num_envs, 6), device=self.device)
             root_vel[:, 0] = self._base_current_vel_world[:, 0]
             root_vel[:, 1] = self._base_current_vel_world[:, 1]
@@ -562,14 +559,14 @@ class XlerobotEnv(DirectRLEnv):
                 )
 
     def _get_observations(self):
-        """获取观察值。"""
+        """Return policy observations."""
         joint_pos = self._robot.data.joint_pos
         joint_vel = self._robot.data.joint_vel
         observations = torch.cat([joint_pos, joint_vel], dim=-1)
         return {"policy": observations}
 
     def _filter_absolute_arm_target(self, desired_target: torch.Tensor) -> torch.Tensor:
-        """绝对控制下对机械臂目标做死区+低通+步长限制，抑制抖动。"""
+        """Filter absolute arm targets with deadband, low-pass, and step limits."""
         prev_target = self._arm_abs_filtered_target
         delta = desired_target - prev_target
 
@@ -582,7 +579,7 @@ class XlerobotEnv(DirectRLEnv):
         if torch.any(self._arm_abs_max_step_per_joint > 0.0):
             max_step = self._arm_abs_max_step_per_joint.unsqueeze(0)
             raw_step = filtered - prev_target
-            # max_step<=0 的关节视为“不限幅”，避免把步长错误夹成0导致关节不动。
+            # max_step <= 0 means no per-step limit for that joint.
             limited_step = torch.clamp(raw_step, -max_step, max_step)
             step = torch.where(max_step > 0.0, limited_step, raw_step)
             filtered = prev_target + step
@@ -599,19 +596,19 @@ class XlerobotEnv(DirectRLEnv):
         return filtered
 
     def _get_rewards(self) -> torch.Tensor:
-        """键盘控制场景 - 不需要奖励。"""
+        """Teleoperation does not use rewards."""
         return torch.zeros((self.num_envs, 1), device=self.device)
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """键盘控制场景 - 永不结束。"""
+        """Teleoperation episodes do not terminate automatically."""
         return (
             torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool),
             torch.zeros((self.num_envs,), device=self.device, dtype=torch.bool),
         )
 
     def _reset_idx(self, env_ids):
-        """重置指定环境。"""
-        print(f"开始重置环境 {env_ids}")
+        """Reset selected environments."""
+        print(f"[XlerobotEnv] Resetting env_ids={env_ids}")
 
         self._robot.write_joint_position_to_sim(self._robot.data.default_joint_pos[env_ids], env_ids=env_ids)
         self._robot.write_joint_velocity_to_sim(self._robot.data.default_joint_vel[env_ids], env_ids=env_ids)
@@ -619,11 +616,11 @@ class XlerobotEnv(DirectRLEnv):
         if self._can_write_root_state():
             initial_pose = torch.cat([self._robot_initial_position, self._robot_initial_orientation])
             self._robot.write_root_pose_to_sim(initial_pose.unsqueeze(0), env_ids=env_ids)
-        print(f"机器人重置到位置: {self._robot_initial_position}")
+        print(f"[XlerobotEnv] Robot reset position: {self._robot_initial_position}")
 
         self.actions[env_ids] = 0.0
 
-        # 清空底盘状态，避免重置后残留速度
+        # Clear base state to avoid residual velocity after reset.
         self._base_command_body[env_ids] = 0.0
         self._base_target_vel_world[env_ids] = 0.0
         self._base_current_vel_world[env_ids] = 0.0
@@ -649,21 +646,21 @@ class XlerobotEnv(DirectRLEnv):
         if hasattr(self, "garment") and self.garment is not None:
             try:
                 if hasattr(self.garment, "initial_points_positions"):
-                    print("开始重置衣服...")
+                    print("[XlerobotEnv] Resetting garment.")
                     self.garment.reset()
-                    print("✅ 衣服重置成功")
+                    print("[XlerobotEnv] Garment reset complete.")
                 else:
-                    print("⚠️ 衣服对象未初始化，尝试初始化...")
+                    print("[XlerobotEnv] Garment not initialized; initializing now.")
                     self.garment.initialize()
-                    print("✅ 衣服对象初始化成功，现在可以重置")
+                    print("[XlerobotEnv] Garment initialized; resetting now.")
                     self.garment.reset()
-                    print("✅ 衣服重置成功")
+                    print("[XlerobotEnv] Garment reset complete.")
             except Exception as e:
-                print(f"❌ 衣服重置失败: {e}")
+                print(f"[XlerobotEnv] Failed to reset garment: {e}")
                 import traceback
                 traceback.print_exc()
         else:
-            print("⚠️ 衣服不存在，跳过重置")
+            print("[XlerobotEnv] No garment configured; skipping garment reset.")
 
         super()._reset_idx(env_ids)
-        print("环境重置完成")
+        print("[XlerobotEnv] Reset complete.")

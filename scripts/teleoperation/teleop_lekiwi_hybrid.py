@@ -120,7 +120,7 @@ def main():
     """Running lehome teleoperation with lekiwi hybrid control."""
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device)
 
-    # 初始化lekiwi动作配置为hybrid模式
+    # Initialize Lekiwi action configuration for hybrid control.
     env_cfg = init_lekiwi_action_cfg(env_cfg, "lekiwi_hybrid")
 
     task_name = args_cli.task
@@ -136,7 +136,7 @@ def main():
         recalibrate=args_cli.recalibrate
     )
 
-    # 设置初始控制模式
+    # Set initial control mode.
     teleop_interface.set_control_mode(args_cli.control_mode)
 
     def sync_env_action_mode():
@@ -154,21 +154,21 @@ def main():
         if getattr(env, "_action_mode", None) != desired_mode:
             env.set_action_mode(desired_mode)
 
-    # 初始同步一次：保证 --control_mode=keyboard 时与纯键盘脚本一致
+    # Initial sync keeps --control_mode=keyboard aligned with teleop_lekiwi.py.
     sync_env_action_mode()
 
-    # 输出控制说明
+    # Print control instructions.
     print("\n" + "="*60)
-    print("🎮 Lekiwi 混合控制说明")
+    print("Lekiwi Hybrid Teleoperation")
     print("="*60)
-    print("底盘控制（键盘）：")
+    print("Base control (keyboard):")
     print(teleop_interface.keyboard_controller)
-    print("\n机械臂控制（SO101Leader）：")
-    print("  - 物理leader设备控制机械臂和夹爪")
-    print("  - 按 F6 切换控制模式")
-    print("  - 按 R/S/N/D 进行机械臂校准")
+    print("\nArm control (SO101Leader):")
+    print("  - Physical leader controls the arm and gripper.")
+    print("  - Press F6 to switch control modes.")
+    print("  - Use R/S/N/D for leader calibration when required.")
     print("="*60)
-    print("💡 提示：按 B 键启动控制，按 F5 重置环境")
+    print("Press B to start control. Press F5 to reset the environment.")
     print("="*60 + "\n")
 
     # add teleoperation key for env reset
@@ -188,13 +188,12 @@ def main():
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
-            # 动态重置夹爪力矩限制
+            # Refresh gripper effort limits when dynamic gripper logic is enabled.
             dynamic_reset_gripper_effort_limit_sim(env, "lekiwi_hybrid")
 
-            # 先更新状态，再获取动作
-            teleop_interface.input2action()  # 更新状态
-            sync_env_action_mode()  # F6切换后实时同步环境动作模式
-            actions = teleop_interface.advance()  # 获取动作
+            teleop_interface.input2action()
+            sync_env_action_mode()
+            actions = teleop_interface.advance()
 
             if actions is None:
                 env.render()

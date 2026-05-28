@@ -122,7 +122,7 @@ def main():
         num_envs=args_cli.num_envs,
     )
     
-    # 初始化xlerobot动作配置
+    # Initialize Xlerobot action configuration.
     env_cfg = init_xlerobot_action_cfg(env_cfg, "hybrid")
     
     task_name = args_cli.task
@@ -139,7 +139,7 @@ def main():
         recalibrate=args_cli.recalibrate
     )
 
-    # 设置初始控制模式
+    # Set initial control mode.
     teleop_interface.set_control_mode(args_cli.control_mode)
 
     def sync_env_action_mode():
@@ -157,7 +157,7 @@ def main():
         if getattr(env, "_action_mode", None) != desired_mode:
             env.set_action_mode(desired_mode)
 
-    # 初始同步一次：保证 --control_mode=keyboard 时与纯键盘脚本一致
+    # Initial sync keeps --control_mode=keyboard aligned with teleop_xlerobot.py.
     sync_env_action_mode()
 
     # add teleoperation key for env reset
@@ -167,10 +167,7 @@ def main():
         nonlocal reset_detected
         reset_detected = True
 
-    # 添加所有必要的回调
     teleop_interface.add_callback("R", reset_env)  # Reset environment
-    
-    # 不需要添加S、N、D等录制相关的回调，因为您只是用于控制
     
     rate_limiter = RateLimiter(args_cli.step_hz)
 
@@ -182,13 +179,12 @@ def main():
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
-            # 动态重置夹爪力矩限制
+            # Refresh gripper effort limits when dynamic gripper logic is enabled.
             dynamic_reset_gripper_effort_limit_sim(env, "xlerobot")
             
-            # 先更新状态，再获取动作
-            teleop_interface.input2action()  # 更新状态
-            sync_env_action_mode()  # F6切换后实时同步环境动作模式
-            actions = teleop_interface.advance()  # 获取动作
+            teleop_interface.input2action()
+            sync_env_action_mode()
+            actions = teleop_interface.advance()
             
             if actions is None:
                 env.render()

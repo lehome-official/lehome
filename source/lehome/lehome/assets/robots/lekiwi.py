@@ -5,16 +5,16 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from lehome.utils.constant import ASSETS_ROOT
 
-# Lekiwi USD文件路径
+# Lekiwi USD asset path.
 LEKIWI_ASSET_PATH = Path(ASSETS_ROOT) / "lekiwi" / "lekiwi_final_best.usd"
 
-# 友好的关节名称映射（从URDF中的复杂名称映射到简单名称）
+# Friendly joint-name aliases for the verbose USD joint names.
 LEKIWI_JOINT_MAPPING = {
-    # 移动底盘 (3个全向轮)
+    # Mobile base omni wheels.
     "wheel_1": "ST3215_Servo_Motor_v1_2_Revolute_60",
     "wheel_2": "ST3215_Servo_Motor_v1_1_Revolute_62",
     "wheel_3": "ST3215_Servo_Motor_v1_Revolute_64",
-    # 机械臂 (6个关节)
+    # Arm and gripper joints.
     "shoulder_pitch": "STS3215_03a_v1_Revolute_45",
     "shoulder_roll": "STS3215_03a_v1_1_Revolute_49",
     "elbow": "STS3215_03a_v1_2_Revolute_51",
@@ -23,7 +23,7 @@ LEKIWI_JOINT_MAPPING = {
     "gripper": "STS3215_03a_v1_4_Revolute_57",
 }
 
-# 反向映射（从URDF名称到友好名称）
+# Reverse lookup from USD joint names to friendly aliases.
 LEKIWI_JOINT_MAPPING_REVERSE = {v: k for k, v in LEKIWI_JOINT_MAPPING.items()}
 
 LEKIWI_CFG = ArticulationCfg(
@@ -43,11 +43,11 @@ LEKIWI_CFG = ArticulationCfg(
         pos=(0.0, 0.0, 0.0),
         rot=(0.0, 0.0, 0.0, 1.0),
         joint_pos={
-            # 移动底盘 - 3个全向轮
+            # Mobile base omni wheels.
             "ST3215_Servo_Motor_v1_2_Revolute_60": 0.0,
             "ST3215_Servo_Motor_v1_1_Revolute_62": 0.0,
             "ST3215_Servo_Motor_v1_Revolute_64": 0.0,
-            # 机械臂 - 6个关节
+            # Arm and gripper joints.
             "STS3215_03a_v1_Revolute_45": 0.0,
             "STS3215_03a_v1_1_Revolute_49": 0.0,
             "STS3215_03a_v1_2_Revolute_51": 0.0,
@@ -57,7 +57,7 @@ LEKIWI_CFG = ArticulationCfg(
         }
     ),
     actuators={
-        # 移动底盘执行器 - 3个全向轮
+        # Mobile base omni-wheel actuators.
         "mobile_base": ImplicitActuatorCfg(
             joint_names_expr=[
                 "ST3215_Servo_Motor_v1_2_Revolute_60",
@@ -69,7 +69,7 @@ LEKIWI_CFG = ArticulationCfg(
             stiffness=2000.0,
             damping=100.0,
         ),
-        # 机械臂执行器 - 6个关节
+        # Arm joint actuators.
         "arm": ImplicitActuatorCfg(
             joint_names_expr=[
                 "STS3215_03a_v1_Revolute_45",
@@ -83,7 +83,7 @@ LEKIWI_CFG = ArticulationCfg(
             stiffness=3000.0,
             damping=100.0,
         ),
-        # 夹爪执行器
+        # Gripper actuator.
         "gripper": ImplicitActuatorCfg(
             joint_names_expr=["STS3215_03a_v1_4_Revolute_57"],
             effort_limit_sim=50,
@@ -94,13 +94,13 @@ LEKIWI_CFG = ArticulationCfg(
     },
 )
 
-# 关节限制（根据URDF和实际硬件调整）
+# Joint limits, aligned with the SO101 arm calibration and USD model.
 LEKIWI_JOINT_LIMITS = {
-    # 移动底盘 - 全向轮（连续旋转）
+    # Mobile base omni wheels are continuous in teleoperation.
     "wheel_1": (-3.14159, 3.14159),
     "wheel_2": (-3.14159, 3.14159),
     "wheel_3": (-3.14159, 3.14159),
-    # 机械臂关节
+    # Arm and gripper joints.
     "shoulder_pitch": (-1.91986, 1.91986),
     "shoulder_roll": (-3.31533, 0.17533),
     "elbow": (-0.00080, 3.31533),
@@ -109,7 +109,7 @@ LEKIWI_JOINT_LIMITS = {
     "gripper": (-1.74533, 0.17453),
 }
 
-# 电机限制（需要根据实际硬件调整）
+# Nominal motor command limits.
 LEKIWI_MOTOR_LIMITS = {
     "wheel_1": (-100.0, 100.0),
     "wheel_2": (-100.0, 100.0),

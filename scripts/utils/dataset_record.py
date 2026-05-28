@@ -706,7 +706,7 @@ def record_dataset(args: argparse.Namespace, simulation_app: SimulationApp) -> N
                     if count_render > 0:
                         idle_frame_counter += 1
                         if idle_frame_counter == 100 and not printed_instructions:
-                            logger.info("=" * 60 + "\n🎮 CONTROL INSTRUCTIONS 🎮\n" + str(teleop_interface) + "\n" + "=" * 60)
+                            logger.info("=" * 60 + "\nCONTROL INSTRUCTIONS\n" + str(teleop_interface) + "\n" + "=" * 60)
                             printed_instructions = True
                 
                 # Loop Branch B: Active Recording (S key pressed and --enable_record set)
