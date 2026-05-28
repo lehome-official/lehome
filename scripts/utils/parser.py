@@ -14,6 +14,8 @@ def setup_record_parser(
         parents=parent_parsers,
         conflict_handler="resolve",
     )
+    # Enable camera rendering by default for recording workflows.
+    parser.set_defaults(enable_cameras=True)
 
     parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
 
@@ -22,7 +24,16 @@ def setup_record_parser(
         "--teleop_device",
         type=str,
         default="keyboard",
-        choices=["keyboard", "bi-keyboard", "so101leader", "bi-so101leader"],
+        choices=[
+            "keyboard",
+            "bi-keyboard",
+            "so101leader",
+            "bi-so101leader",
+            "lekiwi_keyboard",
+            "lekiwi_hybrid",
+            "xlerobot",
+            "xlerobot_leader",
+        ],
         help="Device for interacting with environment",
     )
     parser.add_argument("--port", type=str, default="/dev/ttyACM0", help="Port for the teleop device.")
@@ -79,6 +90,8 @@ def setup_replay_parser(
         parents=parent_parsers,
         conflict_handler="resolve",
     )
+    # Enable camera rendering by default for replay workflows.
+    parser.set_defaults(enable_cameras=True)
 
     parser.add_argument("--task", type=str, default=None, help="Name of the task environment.")
     parser.add_argument("--step_hz", type=int, default=60, help="Stepping rate in Hz.")
@@ -88,8 +101,6 @@ def setup_replay_parser(
     parser.add_argument("--save_successful_only", action="store_true", default=False, help="Only save successful replays.")
     parser.add_argument("--start_episode", type=int, default=0, help="Starting episode index.")
     parser.add_argument("--end_episode", type=int, default=None, help="Ending episode index.")
-    parser.add_argument("--use_random_seed", action="store_true", default=False, help="Use random seed.")
-    parser.add_argument("--seed", type=int, default=42, help="Seed for the environment.")
     parser.add_argument(
         "--task_description",
         type=str,
@@ -141,7 +152,7 @@ def setup_augment_parser(
     parser.add_argument("--urdf_path", type=str, required=True, help="URDF file path")
     parser.add_argument("--state_unit", type=str, default="rad", choices=["rad", "deg"], help="Joint angle unit")
     parser.add_argument("--output_root", type=str, default=None, help="Output directory")
-    parser.add_argument("--overwrite", action="store_true", help="Replace existing ee_pose columns and overwrite existing output files")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing data")
     return parser
 
 

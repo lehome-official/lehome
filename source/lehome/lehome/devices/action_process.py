@@ -4,6 +4,10 @@ import numpy as np
 import isaaclab.envs.mdp as mdp
 
 from lehome.assets.robots.lerobot import SO101_FOLLOWER_USD_JOINT_LIMLITS
+from lehome.devices.lekiwi_action_process import (
+    init_lekiwi_action_cfg,
+    preprocess_lekiwi_device_action,
+)
 
 
 def init_action_cfg(action_cfg, device):
@@ -107,6 +111,8 @@ def init_action_cfg(action_cfg, device):
             joint_names=["gripper"],
             scale=0.7,
         )
+    elif device in ["lekiwi_keyboard", "lekiwi_hybrid"]:
+        action_cfg = init_lekiwi_action_cfg(action_cfg, device)
 
     else:
         action_cfg.arm_action = None
@@ -244,8 +250,12 @@ def preprocess_device_action(action: dict[str, Any], teleop_device) -> torch.Ten
         processed_action[:, :6] = left_current_joint_pos + left_relative_delta
         processed_action[:, 6:] = right_current_joint_pos + right_relative_delta
 
+    elif action.get("lekiwi_keyboard") is not None or action.get("lekiwi_hybrid") is not None:
+        processed_action = preprocess_lekiwi_device_action(action, teleop_device)
+
     else:
         raise NotImplementedError(
-            "Only teleoperation with so101_leader, bi_so101_leader, bi_keyboard, or keyboard is supported for now."
+            "Only teleoperation with so101_leader, bi_so101_leader, bi_keyboard, keyboard, "
+            "lekiwi_keyboard, or lekiwi_hybrid is supported for now."
         )
     return processed_action

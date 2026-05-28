@@ -1,0 +1,74 @@
+# Environment configuration
+num_envs: 4  # Number of parallel environments to run simultaneously
+env_offset: [1.0, 1.0, 0.0]  # Spatial offset for parallel environments (x,y,z) to prevent overlap between environments
+
+room:
+  prim_path_prefix: "/Room_{env_id}"  # Path prefix for room prims in the stage; {env_id} is replaced with the environment index (e.g., "/Room_0")
+
+# Object configuration
+objects:
+  # Path to folder containing USD files (e.g., cube.usd, cone.usd)
+  usd_folder: "Assets/Garment"  # Path to USD files (relative path)
+  num_per_env: 1  # Number of objects to load in each environment (currently 1 object per environment)
+  # Mapping from USD filenames to object types: rigid (with physics) / geometry (geometry-only)
+  usd_type_map:
+    "DSLS_Dress149_obj.usd": "garment"
+    "DSLS_Dress418_obj.usd": "garment"
+    "PL_085_obj.usd": "garment"
+    "PL_M1_074_obj.usd": "garment"
+    "TCLC_Top030_obj.usd": "garment"
+    "TCLC_Top045_obj.usd": "garment"
+    # Extensible for additional objects (e.g., "sphere.usd": "geometry")
+  # Common configurations shared by all objects
+  common:
+    initial_pos_range: [1.4,-2.0,0.635, 1.4,-2.0,0.635]  # Format: [x_min, y_min, z_min, x_max, y_max, z_max] #[1.4, -1.45, 0.1, 1.4, -1.45, 0.1] 
+    # Initial rotation range (in degrees)
+    initial_rot_range: [0, 0, 180, 0, 0, 180]  # Format: [x_min, y_min, z_min, x_max, y_max, z_max] #[0, 0, 180, 0, 0, 180] 
+    # Position range for soft reset (relative to environment offset)
+    soft_reset_pos_range: [1.4,-2.0,0.635, 1.4,-2.0,0.635]  # Random position range for soft reset
+    # Rotation range for soft reset (in degrees)
+    soft_reset_rot_range: [0, 0, 90, 0, 0, 90]
+    #  Scale Parameter
+    scale: [0.0045, 0.0045, 0.0045]
+  # Object-specific configurations (override common settings)
+
+  
+  visual_material:
+    material_usd_folder: "Assets/Material/Garment"
+  particle_system:
+    particle_system_enabled: True
+    enable_ccd: True
+    solver_position_iteration_count: 24
+    max_depenetration_velocity: null
+    global_self_collision_enabled: True
+    non_particle_collision_enabled: True
+    contact_offset: 0.005
+    rest_offset: 0.0025
+    particle_contact_offset: 0.005
+    fluid_rest_offset: 0.0025
+    solid_rest_offset: 0.0025
+    wind: null
+    max_neighborhood: null
+    max_velocity: 5.0
+  particle_material:
+    adhesion: 0.0
+    adhesion_offset_scale: 0.0
+    cohesion: 0.0
+    particle_adhesion_scale: 0.1
+    particle_friction_scale: 0.5
+    drag: 0.0
+    lift: 0.0
+    friction: 1.5
+    damping: 2.0
+    gravity_scale: 2.0
+    viscosity: null
+    vorticity_confinement: null
+    surface_tension: null
+  garment_config:
+    particle_mass: 1e-2
+    self_collision: True
+    self_collision_filter: True
+    stretch_stiffness: 1e6
+    bend_stiffness: 100.0
+    shear_stiffness: 100.0
+    spring_damping: 10.0

@@ -19,6 +19,8 @@ from lehome.devices import (
     SO101Leader,
     BiSO101Leader,
     BiKeyboard,
+    LekiwiKeyboard,
+    XlerobotKeyboard,
 )
 from lehome.utils.env_utils import dynamic_reset_gripper_effort_limit_sim
 from lehome.utils.record import (
@@ -30,71 +32,6 @@ from lehome.utils.logger import get_logger
 from .common import stabilize_robot
 
 logger = get_logger(__name__)
-
-
-def _compute_camera_intrinsics(
-    width: int, height: int, focal_length: float, horizontal_aperture: float
-) -> tuple[float, float, float, float]:
-    """Compute pixel intrinsics from Isaac camera parameters."""
-    vertical_aperture = horizontal_aperture * (height / width)
-    fx = focal_length * width / horizontal_aperture
-    fy = focal_length * height / vertical_aperture
-    cx = width / 2.0
-    cy = height / 2.0
-    return float(fx), float(fy), float(cx), float(cy)
-
-
-def _resolve_top_camera_base_cfg(env: DirectRLEnv, top_camera_cfg: Any) -> Any:
-    """Resolve which robot-base config the top camera is mounted on."""
-    prim_path = str(getattr(top_camera_cfg, "prim_path", ""))
-
-    if "Right_Robot" in prim_path:
-        return getattr(env.cfg, "right_robot", None)
-    if "Left_Robot" in prim_path:
-        return getattr(env.cfg, "left_robot", None)
-
-    for attr in ("robot", "right_robot", "left_robot"):
-        robot_cfg = getattr(env.cfg, attr, None)
-        if robot_cfg is not None:
-            return robot_cfg
-    return None
-
-
-def _build_top_depth_camera_info(env: DirectRLEnv) -> Dict[str, Any]:
-    """Extract task-specific top-camera and robot-base metadata for depth reprojection."""
-    top_camera_cfg = getattr(env.cfg, "top_camera", None)
-    robot_cfg = _resolve_top_camera_base_cfg(env, top_camera_cfg) if top_camera_cfg is not None else None
-    if top_camera_cfg is None or robot_cfg is None:
-        return {}
-
-    width = int(top_camera_cfg.width)
-    height = int(top_camera_cfg.height)
-    focal_length = float(top_camera_cfg.spawn.focal_length)
-    horizontal_aperture = float(top_camera_cfg.spawn.horizontal_aperture)
-    fx, fy, cx, cy = _compute_camera_intrinsics(
-        width, height, focal_length, horizontal_aperture
-    )
-
-    return {
-        "image_size": [height, width],
-        "intrinsics": {
-            "fx": fx,
-            "fy": fy,
-            "cx": cx,
-            "cy": cy,
-            "focal_length": focal_length,
-            "horizontal_aperture": horizontal_aperture,
-        },
-        "camera_to_base": {
-            "translation": [float(v) for v in top_camera_cfg.offset.pos],
-            "rotation_wxyz": [float(v) for v in top_camera_cfg.offset.rot],
-            "convention": str(top_camera_cfg.offset.convention),
-        },
-        "base_to_world": {
-            "translation": [float(v) for v in robot_cfg.init_state.pos],
-            "rotation_wxyz": [float(v) for v in robot_cfg.init_state.rot],
-        },
-    }
 
 
 def validate_task_and_device(args: argparse.Namespace, env: Optional[DirectRLEnv] = None) -> None:
@@ -124,13 +61,20 @@ def validate_task_and_device(args: argparse.Namespace, env: Optional[DirectRLEnv
             ), f"Task has {action_dim} actions (bi-arm), but device is {args.teleop_device}"
         else:
             assert (
-                args.teleop_device == "so101leader" or args.teleop_device == "keyboard"
+                args.teleop_device in [
+                    "so101leader",
+                    "keyboard",
+                    "lekiwi_keyboard",
+                    "lekiwi_hybrid",
+                    "xlerobot",
+                    "xlerobot_leader",
+                ]
             ), f"Task has {action_dim} actions (single-arm), but device is {args.teleop_device}"
 
 
 def create_teleop_interface(
     env: DirectRLEnv, args: argparse.Namespace
-) -> Union[Se3Keyboard, SO101Leader, BiSO101Leader, BiKeyboard]:
+) -> Union[Se3Keyboard, SO101Leader, BiSO101Leader, BiKeyboard, LekiwiKeyboard, XlerobotKeyboard]:
     """Create teleoperation interface based on device type.
 
     Args:
@@ -156,9 +100,13 @@ def create_teleop_interface(
         )
     if args.teleop_device == "bi-keyboard":
         return BiKeyboard(env, sensitivity=0.25 * args.sensitivity)
+    if args.teleop_device == "lekiwi_keyboard":
+        return LekiwiKeyboard(env, sensitivity=0.25 * args.sensitivity)
+    if args.teleop_device == "xlerobot":
+        return XlerobotKeyboard(env, sensitivity=0.25 * args.sensitivity)
     raise ValueError(
         f"Invalid device interface '{args.teleop_device}'. "
-        f"Supported: 'keyboard', 'so101leader', 'bi-so101leader', 'bi-keyboard'."
+        f"Supported: 'keyboard', 'so101leader', 'bi-so101leader', 'bi-keyboard', 'lekiwi_keyboard', 'xlerobot'."
     )
 
 
@@ -196,6 +144,7 @@ def register_teleop_callbacks(
             logger.info("[N] Success marker received (Recording NOT enabled, so no data saved).")
             return
         flags["success"] = True
+        logger.info("[N] Mark the current episode as successful.")
 
     def on_remove():
         if not flags["start"]:
@@ -204,7 +153,7 @@ def register_teleop_callbacks(
 
         flags["remove"] = True
         if recording_enabled:
-            pass
+            logger.info("[D] Discard the current episode and re-record.")
         else:
             logger.info("[D] Reset requested.")
 
@@ -246,8 +195,11 @@ def create_dataset_if_needed(
     if not args.enable_record:
         return None, None, None, False
 
-    # Joint names for SO101/Lerobot arms
-    action_names = [
+    action_dim = env.cfg.action_space
+    is_bi_arm = (action_dim == 12)
+    teleop_device = args.teleop_device
+
+    so101_action_names = [
         "shoulder_pan",
         "shoulder_lift",
         "elbow_flex",
@@ -255,16 +207,45 @@ def create_dataset_if_needed(
         "wrist_roll",
         "gripper",
     ]
+    lekiwi_action_names = [
+        "wheel_1",
+        "wheel_2",
+        "wheel_3",
+        "shoulder_pitch",
+        "shoulder_roll",
+        "elbow",
+        "wrist_pitch",
+        "wrist_roll",
+        "gripper",
+    ]
+    xlerobot_action_names = [
+        "root_z_rotation_joint",
+        "Rotation",
+        "Pitch",
+        "Elbow",
+        "Wrist_Pitch",
+        "Wrist_Roll",
+        "Jaw",
+        "Rotation_2",
+        "Pitch_2",
+        "Elbow_2",
+        "Wrist_Pitch_2",
+        "Wrist_Roll_2",
+        "Jaw_2",
+        "head_pan_joint",
+        "head_tilt_joint",
+    ]
 
-    action_dim = env.cfg.action_space
-    is_bi_arm = (action_dim == 12)
-
-    if is_bi_arm:
-        left_names = [f"left_{n}" for n in action_names]
-        right_names = [f"right_{n}" for n in action_names]
+    if teleop_device in ["lekiwi_keyboard", "lekiwi_hybrid"]:
+        joint_names = lekiwi_action_names
+    elif teleop_device in ["xlerobot", "xlerobot_leader"]:
+        joint_names = xlerobot_action_names
+    elif is_bi_arm:
+        left_names = [f"left_{n}" for n in so101_action_names]
+        right_names = [f"right_{n}" for n in so101_action_names]
         joint_names = left_names + right_names
     else:
-        joint_names = action_names
+        joint_names = so101_action_names
 
     features: Dict[str, Dict[str, Any]] = {
         "observation.state": {
@@ -280,22 +261,17 @@ def create_dataset_if_needed(
     }
 
     if not getattr(args, "disable_depth", False):
-        depth_info: Dict[str, Any] = {
-            "unit": "millimeters",
-            "range_mm": [0, 65535],
-            "range_m": [0.0, 65.535],
-            "precision_mm": 1,
-            "conversion": "depth_meters = uint16_value / 1000.0",
-        }
-        camera_info = _build_top_depth_camera_info(env)
-        if camera_info:
-            depth_info["camera"] = camera_info
-
         features["observation.top_depth"] = {
             "dtype": "uint16",
             "shape": (480, 640),
             "names": ["height", "width"],
-            "info": depth_info,
+            "info": {
+                "unit": "millimeters",
+                "range_mm": [0, 65535],
+                "range_m": [0.0, 65.535],
+                "precision_mm": 1,
+                "conversion": "depth_meters = uint16_value / 1000.0"
+            }
         }
 
     if is_bi_arm:
@@ -408,8 +384,9 @@ def run_idle_phase(
         env.initialize_obs()
         count_render += 1
 
-        logger.info("[Idle Phase] Stabilizing environment... (Please wait for CONTROL INSTRUCTIONS to appear.)")
+        logger.info("[Idle Phase] Stabilizing environment...")
         stabilize_robot(env)
+        logger.info("[Idle Phase] Ready for recording (Press S to start)")
 
     if actions is None:
         # If no teleop input, maintain current joint positions to prevent falling
@@ -513,8 +490,7 @@ def run_recording_phase(
             if getattr(args, "disable_depth", False) and "observation.top_depth" in observations:
                 observations.pop("observation.top_depth")
 
-            # Keep pointcloud conversion offline so teleoperation stays responsive
-            # across the current multi-task release.
+            # Pointcloud online conversion is disabled for performance (matching challenge version)
             if getattr(args, "enable_pointcloud", False):
                 # Converting pointcloud online is extremely time-consuming (due to FPS sampling),
                 # which would break teleoperation fluidity. Please convert offline instead.
@@ -685,24 +661,14 @@ def record_dataset(args: argparse.Namespace, simulation_app: SimulationApp) -> N
     # 1. Environment Setup
     env_cfg = parse_env_cfg(args.task, device=getattr(args, "device", "cpu"))
     
-    # Apply CLI seed settings for environment initialization.
-    if hasattr(env_cfg, "use_random_seed"):
-        env_cfg.use_random_seed = args.use_random_seed
-
-    if args.use_random_seed:
-        if hasattr(env_cfg, "seed"):
-            env_cfg.seed = None
-        if hasattr(env_cfg, "sim") and hasattr(env_cfg.sim, "seed"):
-            env_cfg.sim.seed = None
-        logger.info("Using random seed (no fixed seed)")
-    else:
-        if hasattr(env_cfg, "seed"):
-            env_cfg.seed = args.seed
-        if hasattr(env_cfg, "random_seed"):
-            env_cfg.random_seed = args.seed
-        if hasattr(env_cfg, "sim") and hasattr(env_cfg.sim, "seed"):
-            env_cfg.sim.seed = args.seed
-        logger.info(f"Using fixed random seed: {args.seed}")
+    # Inject generic configurations (e.g. random seeds)
+    config_mappings = {
+        "use_random_seed": args.use_random_seed,
+        "random_seed": args.seed if not args.use_random_seed else None,
+    }
+    for attr, value in config_mappings.items():
+        if hasattr(env_cfg, attr) and value is not None:
+            setattr(env_cfg, attr, value)
 
     # 2. Instantiate Environment
     env: DirectRLEnv = gym.make(args.task, cfg=env_cfg).unwrapped
@@ -739,7 +705,7 @@ def record_dataset(args: argparse.Namespace, simulation_app: SimulationApp) -> N
                     # Print instructions once stabilization is done
                     if count_render > 0:
                         idle_frame_counter += 1
-                        if idle_frame_counter == 20 and not printed_instructions:
+                        if idle_frame_counter == 100 and not printed_instructions:
                             logger.info("=" * 60 + "\n🎮 CONTROL INSTRUCTIONS 🎮\n" + str(teleop_interface) + "\n" + "=" * 60)
                             printed_instructions = True
                 

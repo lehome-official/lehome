@@ -26,6 +26,7 @@ LeHome provides a high-fidelity simulation platform by integrating various house
     - [Use UV](#use-uv)
   - [2. Assets \& Data Preparation](#2-assets--data-preparation)
     - [Download Simulation Assets](#download-simulation-assets)
+    - [Teleoperation](#teleoperation)
     - [Collect Your Own Data](#collect-your-own-data)
   - [3. Object and Scene Configuration](#3-object-and-scene-configuration)
     - [Object and Scene Configuration Guide](#object-and-scene-configuration-guide)
@@ -62,6 +63,18 @@ hf download lehome/lehome_release --repo-type dataset --local-dir Assets
 #### Collect Your Own Data
 
 For detailed instructions on teleoperation data collection and dataset processing, please refer to our [Dataset Collection and Processing Guide](docs/datasets.md) (`SO101 Leader` is strongly recommended).
+
+#### Teleoperation
+
+```bash
+cd /home/lyang116/gitmain/lehome-official
+source .venv/bin/activate
+
+python scripts/teleoperation/teleop_lekiwi.py --device=cuda --enable_cameras
+python scripts/teleoperation/teleop_lekiwi_hybrid.py --device=cuda --enable_cameras --arm_port=/dev/ttyACM0 --control_mode=hybrid
+python scripts/teleoperation/teleop_xlerobot.py --device=cuda --enable_cameras
+python scripts/teleoperation/teleop_xlerobot_hybrid.py --device=cuda --enable_cameras --left_arm_port=/dev/ttyACM0 --right_arm_port=/dev/ttyACM0 --control_mode=hybrid
+```
 
 ### 3. Object and Scene Configuration
 
