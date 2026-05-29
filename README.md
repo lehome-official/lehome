@@ -26,7 +26,6 @@ LeHome provides a high-fidelity simulation platform by integrating various house
     - [Use UV](#use-uv)
   - [2. Assets \& Data Preparation](#2-assets--data-preparation)
     - [Download Simulation Assets](#download-simulation-assets)
-    - [Teleoperation](#teleoperation)
     - [Collect Your Own Data](#collect-your-own-data)
   - [3. Object and Scene Configuration](#3-object-and-scene-configuration)
     - [Object and Scene Configuration Guide](#object-and-scene-configuration-guide)
@@ -59,28 +58,6 @@ Download the required simulation assets (Material, scenes, objects, robots) from
 # This creates the Assets/ directory with the required simulation resources
 hf download lehome/lehome_release --repo-type dataset --local-dir Assets
 ```
-
-#### Teleoperation
-
-The Lekiwi and Xlerobot teleoperation examples require the release assets above. The commands below assume you are running from the repository root after activating the LeHome Python environment.
-
-Keyboard-only examples:
-
-```bash
-python scripts/teleoperation/teleop_lekiwi.py --device=cuda --enable_cameras
-python scripts/teleoperation/teleop_xlerobot.py --device=cuda --enable_cameras
-```
-
-Hybrid examples use keyboard control for the mobile base and SO101 leader arms for arm control. Grant serial access before starting hybrid teleoperation:
-
-```bash
-sudo chmod 666 /dev/ttyACM*
-
-python scripts/teleoperation/teleop_lekiwi_hybrid.py --device=cuda --enable_cameras --arm_port=/dev/ttyACM0 --control_mode=hybrid
-python scripts/teleoperation/teleop_xlerobot_hybrid.py --device=cuda --enable_cameras --left_arm_port=/dev/ttyACM0 --right_arm_port=/dev/ttyACM0 --control_mode=hybrid
-```
-
-Press `B` in the simulator window to start control. Use `W/A/S/D` and `Q/E` for mobile-base movement. Use `F5` to reset. Hybrid controllers support `F6` to switch control modes. Add `--quiet_kit_logs` to reduce Omniverse/PhysX startup log noise.
 
 #### Collect Your Own Data
 
