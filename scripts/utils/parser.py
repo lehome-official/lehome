@@ -22,16 +22,7 @@ def setup_record_parser(
         "--teleop_device",
         type=str,
         default="keyboard",
-        choices=[
-            "keyboard",
-            "bi-keyboard",
-            "so101leader",
-            "bi-so101leader",
-            "lekiwi_keyboard",
-            "lekiwi_hybrid",
-            "xlerobot",
-            "xlerobot_leader",
-        ],
+        choices=["keyboard", "bi-keyboard", "so101leader", "bi-so101leader"],
         help="Device for interacting with environment",
     )
     parser.add_argument("--port", type=str, default="/dev/ttyACM0", help="Port for the teleop device.")

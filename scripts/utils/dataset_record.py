@@ -19,10 +19,6 @@ from lehome.devices import (
     SO101Leader,
     BiSO101Leader,
     BiKeyboard,
-    LekiwiKeyboard,
-    LekiwiHybridController,
-    XlerobotKeyboard,
-    XlerobotLeader,
 )
 from lehome.utils.env_utils import dynamic_reset_gripper_effort_limit_sim
 from lehome.utils.record import (
@@ -128,29 +124,13 @@ def validate_task_and_device(args: argparse.Namespace, env: Optional[DirectRLEnv
             ), f"Task has {action_dim} actions (bi-arm), but device is {args.teleop_device}"
         else:
             assert (
-                args.teleop_device in [
-                    "so101leader",
-                    "keyboard",
-                    "lekiwi_keyboard",
-                    "lekiwi_hybrid",
-                    "xlerobot",
-                    "xlerobot_leader",
-                ]
+                args.teleop_device == "so101leader" or args.teleop_device == "keyboard"
             ), f"Task has {action_dim} actions (single-arm), but device is {args.teleop_device}"
 
 
 def create_teleop_interface(
     env: DirectRLEnv, args: argparse.Namespace
-) -> Union[
-    Se3Keyboard,
-    SO101Leader,
-    BiSO101Leader,
-    BiKeyboard,
-    LekiwiKeyboard,
-    LekiwiHybridController,
-    XlerobotKeyboard,
-    XlerobotLeader,
-]:
+) -> Union[Se3Keyboard, SO101Leader, BiSO101Leader, BiKeyboard]:
     """Create teleoperation interface based on device type.
 
     Args:
@@ -176,23 +156,9 @@ def create_teleop_interface(
         )
     if args.teleop_device == "bi-keyboard":
         return BiKeyboard(env, sensitivity=0.25 * args.sensitivity)
-    if args.teleop_device == "lekiwi_keyboard":
-        return LekiwiKeyboard(env, sensitivity=0.25 * args.sensitivity)
-    if args.teleop_device == "lekiwi_hybrid":
-        return LekiwiHybridController(
-            env,
-            sensitivity=0.25 * args.sensitivity,
-            arm_port=args.port,
-            recalibrate=args.recalibrate,
-        )
-    if args.teleop_device == "xlerobot":
-        return XlerobotKeyboard(env, sensitivity=0.25 * args.sensitivity)
-    if args.teleop_device == "xlerobot_leader":
-        return XlerobotLeader(env, port=args.port, recalibrate=args.recalibrate)
     raise ValueError(
         f"Invalid device interface '{args.teleop_device}'. "
-        f"Supported: 'keyboard', 'so101leader', 'bi-so101leader', 'bi-keyboard', "
-        f"'lekiwi_keyboard', 'lekiwi_hybrid', 'xlerobot', 'xlerobot_leader'."
+        f"Supported: 'keyboard', 'so101leader', 'bi-so101leader', 'bi-keyboard'."
     )
 
 
@@ -280,11 +246,8 @@ def create_dataset_if_needed(
     if not args.enable_record:
         return None, None, None, False
 
-    action_dim = env.cfg.action_space
-    is_bi_arm = (action_dim == 12)
-    teleop_device = args.teleop_device
-
-    so101_action_names = [
+    # Joint names for SO101/Lerobot arms
+    action_names = [
         "shoulder_pan",
         "shoulder_lift",
         "elbow_flex",
@@ -292,45 +255,16 @@ def create_dataset_if_needed(
         "wrist_roll",
         "gripper",
     ]
-    lekiwi_action_names = [
-        "wheel_1",
-        "wheel_2",
-        "wheel_3",
-        "shoulder_pitch",
-        "shoulder_roll",
-        "elbow",
-        "wrist_pitch",
-        "wrist_roll",
-        "gripper",
-    ]
-    xlerobot_action_names = [
-        "root_z_rotation_joint",
-        "Rotation",
-        "Pitch",
-        "Elbow",
-        "Wrist_Pitch",
-        "Wrist_Roll",
-        "Jaw",
-        "Rotation_2",
-        "Pitch_2",
-        "Elbow_2",
-        "Wrist_Pitch_2",
-        "Wrist_Roll_2",
-        "Jaw_2",
-        "head_pan_joint",
-        "head_tilt_joint",
-    ]
 
-    if teleop_device in ["lekiwi_keyboard", "lekiwi_hybrid"]:
-        joint_names = lekiwi_action_names
-    elif teleop_device in ["xlerobot", "xlerobot_leader"]:
-        joint_names = xlerobot_action_names
-    elif is_bi_arm:
-        left_names = [f"left_{n}" for n in so101_action_names]
-        right_names = [f"right_{n}" for n in so101_action_names]
+    action_dim = env.cfg.action_space
+    is_bi_arm = (action_dim == 12)
+
+    if is_bi_arm:
+        left_names = [f"left_{n}" for n in action_names]
+        right_names = [f"right_{n}" for n in action_names]
         joint_names = left_names + right_names
     else:
-        joint_names = so101_action_names
+        joint_names = action_names
 
     features: Dict[str, Dict[str, Any]] = {
         "observation.state": {
