@@ -50,7 +50,7 @@ class XlerobotEnvCfg(DirectRLEnvCfg):
         width=640,
         height=480,
     )
-    
+
     # Scene configuration.
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=1, env_spacing=4.0, replicate_physics=True

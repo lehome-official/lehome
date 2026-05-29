@@ -19,7 +19,7 @@ def init_xlerobot_action_cfg(action_cfg, device):
         #     joint_names=["root_x_axis_joint", "root_z_rotation_joint"],
         #     scale=2.0,
         # )
-        
+
         # Keep manager actions only for arms, grippers, and head joints.
         action_cfg.left_arm_action = mdp.RelativeJointPositionActionCfg(
             asset_name="robot",
@@ -46,7 +46,7 @@ def init_xlerobot_action_cfg(action_cfg, device):
             joint_names=["head_pan_joint", "head_tilt_joint"],
             scale=2.0,
         )
-        
+
         # Disable manager base actions to avoid conflicting control paths.
         action_cfg.base_action = None
     elif device in ["hybrid", "arms_only"]:
@@ -57,7 +57,7 @@ def init_xlerobot_action_cfg(action_cfg, device):
         action_cfg.right_arm_action = None
         action_cfg.right_gripper_action = None
         action_cfg.head_action = None
-        
+
     elif device in ['xlerobot_leader']:
         # Physical leader control uses absolute position targets.
         action_cfg.base_action = mdp.JointPositionActionCfg(
@@ -116,7 +116,7 @@ def init_xlerobot_action_cfg(action_cfg, device):
         action_cfg.right_arm_action = None
         action_cfg.right_gripper_action = None
         action_cfg.head_action = None
-    
+
     return action_cfg
 
 
@@ -124,7 +124,7 @@ def init_xlerobot_action_cfg(action_cfg, device):
 xlerobot_joint_names_to_motor_ids = {
     # Base rotation (0).
     "root_z_rotation_joint": 0,
-    
+
     # Left arm (1-5).
     "Rotation": 1,
     "Pitch": 2,
@@ -132,7 +132,7 @@ xlerobot_joint_names_to_motor_ids = {
     "Wrist_Pitch": 4,
     "Wrist_Roll": 5,
     "Jaw": 6,  # left gripper
-    
+
     # Right arm (7-11).
     "Rotation_2": 7,
     "Pitch_2": 8,
@@ -140,7 +140,7 @@ xlerobot_joint_names_to_motor_ids = {
     "Wrist_Pitch_2": 10,
     "Wrist_Roll_2": 11,
     "Jaw_2": 12,  # right gripper
-    
+
     # Head (13-14).
     "head_pan_joint": 13,
     "head_tilt_joint": 14,
@@ -256,19 +256,19 @@ def _convert_so101_arm_to_xlerobot_arm(
 def convert_action_from_xlerobot_leader(joint_state: dict[str, float], motor_limits: dict[str, tuple[float, float]], teleop_device) -> torch.Tensor:
     """Convert xlerobot leader actions into the environment action layout."""
     processed_action = torch.zeros(teleop_device.env.num_envs, 15, device=teleop_device.env.device)
-    
+
     for joint_name, motor_id in xlerobot_joint_names_to_motor_ids.items():
         if joint_name in joint_state and joint_name in motor_limits:
             motor_limit_range = motor_limits[joint_name]
             joint_limit_range = XLEROBOT_JOINT_LIMITS[joint_name]
-            
+
             # Map device values into the simulated joint range.
             processed_value = (joint_state[joint_name] - motor_limit_range[0]) / (motor_limit_range[1] - motor_limit_range[0]) \
                 * (joint_limit_range[1] - joint_limit_range[0]) + joint_limit_range[0]
 
             # XLEROBOT_JOINT_LIMITS already use simulation units.
             processed_action[:, motor_id] = processed_value
-    
+
     return processed_action
 
 
@@ -322,7 +322,7 @@ def preprocess_xlerobot_device_action(action: dict[str, Any], teleop_device) -> 
         )
     else:
         raise NotImplementedError("Only teleoperation with xlerobot_leader, bi_xlerobot_leader, keyboard, xbox, hybrid_controller is supported for xlerobot.")
-    
+
     return processed_action
 
 

@@ -36,33 +36,33 @@ parser = argparse.ArgumentParser(
     description="lehome teleoperation with xlerobot hybrid control."
 )
 parser.add_argument(
-    "--num_envs", 
-    type=int, 
-    default=1, 
+    "--num_envs",
+    type=int,
+    default=1,
     help="Number of environments to simulate."
 )
 parser.add_argument(
-    "--task", 
-    type=str, 
+    "--task",
+    type=str,
     default="LeIsaac-Xlerobot-Direct-Task-v0",
     help="Name of the task."
 )
 parser.add_argument(
-    "--seed", 
-    type=int, 
-    default=42, 
+    "--seed",
+    type=int,
+    default=42,
     help="Seed for the environment."
 )
 parser.add_argument(
-    "--sensitivity", 
-    type=float, 
-    default=1.0, 
+    "--sensitivity",
+    type=float,
+    default=1.0,
     help="Sensitivity factor for keyboard control."
 )
 parser.add_argument(
-    "--step_hz", 
-    type=int, 
-    default=30, 
+    "--step_hz",
+    type=int,
+    default=30,
     help="Environment stepping rate in Hz."
 )
 parser.add_argument(
@@ -157,10 +157,10 @@ def main():
         num_envs=args_cli.num_envs,
     )
     env_cfg.seed = args_cli.seed
-    
+
     # Initialize Xlerobot action configuration.
     env_cfg = init_xlerobot_action_cfg(env_cfg, "hybrid")
-    
+
     task_name = args_cli.task
 
     # create environment
@@ -168,7 +168,7 @@ def main():
 
     # create xlerobot hybrid controller
     teleop_interface = XlerobotHybridController(
-        env, 
+        env,
         sensitivity=0.25 * args_cli.sensitivity,
         left_arm_port=args_cli.left_arm_port,
         right_arm_port=args_cli.right_arm_port,
@@ -204,40 +204,40 @@ def main():
         reset_detected = True
 
     teleop_interface.add_callback("R", reset_env)  # Reset environment
-    
+
     rate_limiter = RateLimiter(args_cli.step_hz)
 
     # reset environment
     teleop_interface.reset()
-    
+
     count_render = 0
-    
+
     # simulate environment
     while simulation_app.is_running():
         with torch.inference_mode():
             # Refresh gripper effort limits when dynamic gripper logic is enabled.
             dynamic_reset_gripper_effort_limit_sim(env, "xlerobot")
-            
+
             teleop_interface.input2action()
             sync_env_action_mode()
             actions = teleop_interface.advance()
-            
+
             if actions is None:
                 env.render()
             else:
                 env.step(actions)
-                
+
             # Rate limiting
             if rate_limiter:
                 rate_limiter.sleep(env)
-                
+
             # Initialize object on first render
             if count_render == 0:
                 if (hasattr(env, 'object') and
                         hasattr(env.object, 'initialize')):
                     env.object.initialize()
                 count_render += 1
-                
+
             # Handle environment reset
             if reset_detected:
                 env.reset()

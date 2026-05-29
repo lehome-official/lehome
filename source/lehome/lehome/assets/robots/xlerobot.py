@@ -24,7 +24,7 @@ XLEROBOT_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(2.0, -2.0, 0.0),  
+        pos=(2.0, -2.0, 0.0),
         rot=(0.0, 0.0, 0.0, 1.0),
         joint_pos={
             # Mobile base joints.
@@ -102,7 +102,7 @@ XLEROBOT_JOINT_LIMITS = {
     "root_x_axis_joint": (-20.0, 20.0),
     "root_y_axis_joint": (-20.0, 20.0),
     "root_z_rotation_joint": (-3.14159, 3.14159),
-    
+
     # Left arm joints.
     "Rotation": (-2.1, 2.1),
     "Pitch": (-0.1, 3.45),
@@ -110,7 +110,7 @@ XLEROBOT_JOINT_LIMITS = {
     "Wrist_Pitch": (-1.8, 1.8),
     "Wrist_Roll": (-3.14159, 3.14159),
     "Jaw": (0.0, 1.7),
-    
+
     # Right arm joints.
     "Rotation_2": (-2.1, 2.1),
     "Pitch_2": (-0.1, 3.45),
@@ -118,7 +118,7 @@ XLEROBOT_JOINT_LIMITS = {
     "Wrist_Pitch_2": (-1.8, 1.8),
     "Wrist_Roll_2": (-3.14159, 3.14159),
     "Jaw_2": (0.0, 1.7),
-    
+
     # Head joints.
     "head_pan_joint": (-1.57, 1.57),
     "head_tilt_joint": (-0.76, 1.45),

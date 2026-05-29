@@ -13,27 +13,27 @@ from ...assets.robots.xlerobot import XLEROBOT_JOINT_LIMITS
 
 class XlerobotHybridController(Device):
     """Hybrid controller: keyboard base/head control plus dual SO101 leaders."""
-    
-    def __init__(self, env, sensitivity: float = 1.0, 
-                 left_arm_port: str = '/dev/ttyACM0', 
-                 right_arm_port: str = '/dev/ttyACM1', 
+
+    def __init__(self, env, sensitivity: float = 1.0,
+                 left_arm_port: str = '/dev/ttyACM0',
+                 right_arm_port: str = '/dev/ttyACM1',
                  recalibrate: bool = False):
         super().__init__(env)
-        
+
         # Keyboard controller for base and head control.
         self.keyboard_controller = XlerobotKeyboard(env, sensitivity)
-        
+
         # Dual-arm leader controller.
         self.bi_arm_controller = BiXlerobotLeader(
-            env, 
-            left_port=left_arm_port, 
-            right_port=right_arm_port, 
+            env,
+            left_port=left_arm_port,
+            right_port=right_arm_port,
             recalibrate=recalibrate
         )
-        
+
         # Control mode state.
         self.control_mode = "hybrid"  # "keyboard", "hybrid", "arms_only"
-        
+
         # Runtime state.
         self.started = False
         self._reset_state = False
@@ -59,7 +59,7 @@ class XlerobotHybridController(Device):
 
         # Enable F6 mode switching by default.
         self.add_callback("F6", lambda: None)
-        
+
     def set_control_mode(self, mode: str):
         """Set the active control mode."""
         assert mode in ["keyboard", "hybrid", "arms_only"], f"Invalid control mode: {mode}"
@@ -112,7 +112,7 @@ class XlerobotHybridController(Device):
         hybrid_state[0] = keyboard_state[0]
         hybrid_state[13:15] = keyboard_state[13:15]
         return hybrid_state
-        
+
     def get_device_state(self):
         """Return the current device state."""
         if self.control_mode == "keyboard":
@@ -152,13 +152,13 @@ class XlerobotHybridController(Device):
         else:  # hybrid mode
             keyboard_action = self.keyboard_controller.input2action()
             arms_action = self.bi_arm_controller.input2action()
-            
+
             # Hybrid mode may be started from either keyboard or arm leaders.
             self.started = (
                 keyboard_action.get("started", False)
                 or arms_action.get("started", False)
             )
-            
+
             # Update cached serial state.
             self._cached_arms_action = arms_action
             keyboard_state = keyboard_action.get("joint_state")
@@ -169,7 +169,7 @@ class XlerobotHybridController(Device):
                 arms_action.get("joint_state", {}),
                 arms_action.get("motor_limits", {}),
             )
-            
+
             hybrid_action = {
                 "reset": keyboard_action.get("reset", False) or arms_action.get("reset", False),
                 "started": self.started,
@@ -181,9 +181,9 @@ class XlerobotHybridController(Device):
                 "motor_limits": arms_action.get("motor_limits", {}),
             }
             self._latest_state_vector = hybrid_action.get("joint_state")
-            
+
             return hybrid_action
-    
+
     def advance(self):
         """Return the current action tensor."""
         if not self.started:
@@ -192,7 +192,7 @@ class XlerobotHybridController(Device):
         # Prefer input2action() cache to avoid duplicate serial reads.
         action = self._latest_state_vector if self._latest_state_vector is not None else self.get_device_state()
         return torch.tensor(action, dtype=torch.float32, device=self.env.device)
-    
+
     def reset(self):
         """Reset controller state."""
         self.keyboard_controller.reset()
@@ -204,7 +204,7 @@ class XlerobotHybridController(Device):
         self._latest_state_vector = None
         self._cached_arms_action = None
         self._clear_base_command()
-    
+
     def add_callback(self, key: str, func: Callable):
         """Register a controller callback."""
         # Keyboard callbacks handle mode switching.
@@ -220,11 +220,11 @@ class XlerobotHybridController(Device):
         else:
             # Other callbacks go to the keyboard controller.
             self.keyboard_controller.add_callback(key, func)
-            
+
             # Forward B so BiSO101Leader can start arm control.
             if key == "B":
                 self.bi_arm_controller.add_callback(key, func)
-    
+
     def __str__(self) -> str:
         """Return a human-readable controller summary."""
         msg = "Xlerobot Hybrid Controller\n"
@@ -242,14 +242,14 @@ class XlerobotHybridController(Device):
     def _convert_arm_action(self, joint_state: dict, motor_limits: dict) -> np.ndarray:
         """Convert one SO101 leader arm into the Xlerobot arm layout."""
         processed_action = np.zeros(6)
-        
+
         if not motor_limits:
             print("[XlerobotHybridController] Missing motor limits; using zero arm action.")
             return processed_action
-        
+
         # SO101 follower joint limits are expressed in degrees.
         from lehome.assets.robots.lerobot import SO101_FOLLOWER_USD_JOINT_LIMLITS
-        
+
         # SO101 joint name to Xlerobot arm action index.
         joint_mapping = {
             'shoulder_pan': 0,
@@ -259,7 +259,7 @@ class XlerobotHybridController(Device):
             'wrist_roll': 4,
             'gripper': 5
         }
-        
+
         # Direction correction for SO101-to-Xlerobot geometry.
         joint_direction_correction = {
             'shoulder_pan': 1,
@@ -269,7 +269,7 @@ class XlerobotHybridController(Device):
             'wrist_roll': -1,
             'gripper': 1
         }
-        
+
         # Zero offsets in radians.
         joint_zero_offset = {
             'shoulder_pan': 0.0,
@@ -279,12 +279,12 @@ class XlerobotHybridController(Device):
             'wrist_roll': 0.0,
             'gripper': 0.0
         }
-        
+
         for joint_name, index in joint_mapping.items():
             if joint_name in joint_state and joint_name in motor_limits:
                 motor_limit_range = motor_limits[joint_name]
                 joint_limit_range = SO101_FOLLOWER_USD_JOINT_LIMLITS[joint_name]
-                
+
                 # Map motor range to SO101 joint range in degrees.
                 processed_degree = (joint_state[joint_name] - motor_limit_range[0]) / (motor_limit_range[1] - motor_limit_range[0]) \
                     * (joint_limit_range[1] - joint_limit_range[0]) + joint_limit_range[0]
