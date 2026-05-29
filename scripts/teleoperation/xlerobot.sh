@@ -1,1 +1,1 @@
-python scripts/teleoperation/teleop_xlerobot.py    --device=cuda     --enable_cameras 
+python scripts/teleoperation/teleop_xlerobot.py --device=cuda --enable_cameras
