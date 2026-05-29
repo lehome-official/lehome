@@ -2,6 +2,30 @@
 
 This guide covers the Lekiwi and Xlerobot teleoperation examples.
 
+## Fresh Checkout Setup
+
+Start from the standard LeHome installation flow:
+
+```bash
+git clone https://github.com/lehome-official/lehome.git
+cd lehome
+
+uv sync
+git clone https://github.com/lehome-official/IsaacLab.git third_party/IsaacLab
+
+export TERM=xterm
+source .venv/bin/activate
+./third_party/IsaacLab/isaaclab.sh -i none
+uv pip install -e ./source/lehome
+```
+
+On the first Isaac Sim launch, NVIDIA Omniverse may ask for EULA acceptance. If a non-interactive shell exits before the prompt can be answered, run this once in an interactive terminal and type `Yes`:
+
+```bash
+source .venv/bin/activate
+python -c "import isaacsim"
+```
+
 ## Assets
 
 Download the release assets into the repository root:
