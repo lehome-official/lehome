@@ -167,12 +167,13 @@ This project stands on the shoulders of giants. We utilize and build upon the fo
 If you use LeHome in your research, please consider citing:
 
 ```bibtex
-@misc{li2026lehomesimulationenvironmentdeformable,
-      title={LeHome: A Simulation Environment for Deformable Object Manipulation in Household Scenarios}, 
-      author={Zeyi Li and Yushi Yang and Shawn Xie and Kyle Xu and Tianxing Chen and Yuran Wang and Zhenhao Shen and Yan Shen and Yue Chen and Wenjun Li and Yukun Zheng and Chaorui Zhang and Siyi Lin and Fei Teng and Hongjun Yang and Ming Chen and Steve Xie and Ruihai Wu},
-      year={2026},
-      eprint={2604.22363},
-      archivePrefix={arXiv},
-      primaryClass={cs.RO},
-      url={https://arxiv.org/abs/2604.22363}, 
+@inproceedings{li2026lehome,
+  title={{LeHome}: A Simulation Environment for Deformable Object Manipulation in Household Scenarios},
+  author={Zeyi Li and Yushi Yang and Shawn Xie and Kyle Xu and Tianxing Chen and Yuran Wang and Zhenhao Shen and Yan Shen and Yue Chen and Wenjun Li and Yukun Zheng and Chaorui Zhang and Siyi Lin and Fei Teng and Hongjun Yang and Ming Chen and Steve Xie and Ruihai Wu},
+  booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)},
+  year={2026},
+  eprint={2604.22363},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2604.22363}
 }
