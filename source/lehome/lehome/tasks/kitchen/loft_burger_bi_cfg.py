@@ -4,7 +4,8 @@ from __future__ import annotations
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
 
-from isaaclab.assets import ArticulationCfg, DeformableObjectCfg, RigidObjectCfg
+from isaaclab.assets import ArticulationCfg, RigidObjectCfg
+from isaaclab_physx.assets import DeformableObjectCfg
 from isaaclab.sensors import TiledCameraCfg
 
 from lehome.assets.robots.lerobot import SO101_FOLLOWER_CFG

@@ -4,7 +4,8 @@ import torch
 # from dataclasses import MISSING
 from typing import Any, Sequence
 
-from isaaclab.assets import Articulation, DeformableObject, RigidObject
+from isaaclab.assets import Articulation, RigidObject
+from isaaclab_physx.assets import DeformableObject
 from isaaclab.sensors import TiledCamera
 from .loft_burger_bi_cfg import LoftBurgerEnvCfg
 from ..base.base_env import BaseEnv

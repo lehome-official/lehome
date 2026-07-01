@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import torch
+import warp as wp
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,6 +15,12 @@ from omegaconf import OmegaConf
 from ..base.base_env import BaseEnv
 from ..base.base_env_cfg import BaseEnvCfg
 from .loft_wipe_cfg import LoftWipeEnvCfg
+
+
+def _to_torch(value):
+    if isinstance(value, torch.Tensor):
+        return value
+    return wp.to_torch(value)
 
 
 class LoftWipeEnv(BaseEnv):
@@ -31,7 +38,7 @@ class LoftWipeEnv(BaseEnv):
         # Additional initialization specific to this environment
 
         self.action_scale = self.cfg.action_scale
-        self.joint_pos = self.robot.data.joint_pos
+        self._obs_initialized = False
 
     def _setup_scene(self):
         """Setup the scene by calling parent method and adding additional assets."""
@@ -77,8 +84,9 @@ class LoftWipeEnv(BaseEnv):
 
     def _get_observations(self) -> dict:
         action = self.actions.squeeze(0)
+        robot_joint_pos = _to_torch(self.robot.data.joint_pos)
         joint_pos = torch.cat(
-            [self.joint_pos[:, i].unsqueeze(1) for i in range(6)], dim=-1
+            [robot_joint_pos[:, i].unsqueeze(1) for i in range(6)], dim=-1
         ).squeeze(0)
 
         top_camera_rgb = self.top_camera.data.output["rgb"]
@@ -113,10 +121,13 @@ class LoftWipeEnv(BaseEnv):
             env_ids = self.robot._ALL_INDICES
         super()._reset_idx(env_ids)
 
-        wrist_joint_pos = self.robot.data.default_joint_pos[env_ids]
+        wrist_joint_pos = _to_torch(self.robot.data.default_joint_pos)[env_ids]
         self.robot.write_joint_position_to_sim(
             wrist_joint_pos, joint_ids=None, env_ids=env_ids
         )
+        if not self._obs_initialized:
+            self.initialize_obs()
+            self._obs_initialized = True
         self.towel.reset()
         self.object.reset(soft=True)
 
